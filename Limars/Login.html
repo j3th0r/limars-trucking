@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign In | LIMARS Tracker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --navy-950: #0c1a33; --navy-900: #14284b; --navy-800: #1d3a6d; --navy-700: #2a4f93; --navy-50: #f4f7fc;
+      --accent: #2563eb;
+      --ink: #0f172a; --ink-2: #334155; --muted: #64748b;
+      --line: #e3e8f0; --line-2: #cbd5e1; --page: #eef2f8;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Arial, sans-serif;
+      font-size: 14px; line-height: 1.5; color: var(--ink); background: var(--page);
+      min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .login-shell {
+      display: grid; grid-template-columns: 1.05fr 1fr; width: 100%; max-width: 940px; min-height: 560px;
+      background: #fff; border: 1px solid var(--line); border-radius: 18px; overflow: hidden;
+      box-shadow: 0 20px 50px rgba(8, 26, 48, .14), 0 2px 6px rgba(8, 26, 48, .06);
+    }
+
+    /* Brand panel */
+    .brand-panel {
+      position: relative; padding: 44px 40px; color: #fff; display: flex; flex-direction: column; justify-content: space-between;
+      background: linear-gradient(145deg, var(--navy-950) 0%, var(--navy-900) 55%, var(--navy-800) 100%);
+    }
+    .brand-panel::after {
+      content: ''; position: absolute; right: -90px; bottom: -90px; width: 280px; height: 280px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(37, 99, 235, .45), rgba(37, 99, 235, 0) 70%);
+    }
+    .brand { display: flex; align-items: center; gap: 12px; position: relative; z-index: 1; }
+    .brand-mark {
+      width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; font-size: 19px; font-weight: 800;
+      background: linear-gradient(135deg, #3b82f6, var(--accent)); box-shadow: 0 4px 12px rgba(37, 99, 235, .4);
+    }
+    .brand-name { font-size: 18px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+    .brand-copy { position: relative; z-index: 1; }
+    .brand-copy h2 { font-size: 26px; font-weight: 700; line-height: 1.25; letter-spacing: -.01em; margin-bottom: 12px; }
+    .brand-copy p { color: rgba(255, 255, 255, .68); font-size: 13.5px; max-width: 320px; }
+    .brand-foot { position: relative; z-index: 1; font-size: 11.5px; color: rgba(255, 255, 255, .45); }
+
+    /* Form panel */
+    .form-panel { padding: 48px 44px; display: flex; flex-direction: column; justify-content: center; }
+    .form-panel h1 { font-size: 24px; font-weight: 800; color: var(--navy-900); letter-spacing: -.01em; }
+    .form-panel .sub { color: var(--muted); margin: 4px 0 28px; }
+
+    .field { margin-bottom: 18px; }
+    .field label { display: block; margin-bottom: 6px; font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
+    .field input {
+      width: 100%; padding: 11px 13px; border: 1px solid var(--line-2); border-radius: 8px; background: #fff; color: var(--ink);
+      font-family: inherit; font-size: 14px; transition: border-color .15s, box-shadow .15s;
+    }
+    .field input::placeholder { color: #94a3b8; }
+    .field input:hover { border-color: #94a3b8; }
+    .field input:focus { outline: none; border-color: var(--navy-700); box-shadow: 0 0 0 3px rgba(42, 79, 147, .16); }
+
+    .btn-signin {
+      width: 100%; margin-top: 6px; padding: 12px 20px; border: 0; border-radius: 9px; cursor: pointer;
+      background: var(--navy-900); color: #fff; font-family: inherit; font-size: 14px; font-weight: 600;
+      box-shadow: 0 2px 6px rgba(20, 40, 75, .25); transition: background .15s, box-shadow .15s, transform .1s;
+    }
+    .btn-signin:hover { background: var(--navy-700); box-shadow: 0 4px 12px rgba(20, 40, 75, .28); }
+    .btn-signin:active { transform: translateY(1px); }
+    .btn-signin:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .form-foot { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); text-align: center; }
+
+
+    .error { display: none; margin-bottom: 18px; padding: 11px 14px; border-radius: 8px; font-size: 13px; font-weight: 500;
+      color: #991b1b; background: #fef2f2; border: 1px solid #fecaca; }
+    .hint { font-size: 12px; color: var(--muted); margin: -6px 0 14px; }
+    .btn-signin:disabled { opacity: .65; cursor: wait; }
+    .form-panel.checking form, .form-panel.checking .sub { opacity: .45; pointer-events: none; }
+
+    @media (max-width: 760px) {
+      body { padding: 16px; align-items: flex-start; }
+      .login-shell { grid-template-columns: 1fr; min-height: 0; }
+      .brand-panel { padding: 28px 24px; }
+      .brand-copy, .brand-foot { display: none; }
+      .form-panel { padding: 32px 24px 28px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="login-shell">
+    <section class="brand-panel">
+      <div class="brand">
+        <div class="brand-mark">L</div>
+        <div class="brand-name">LIMARS Tracker</div>
+      </div>
+      <div class="brand-copy">
+        <h2>Trucking operations and finances in one place.</h2>
+        <p>Dispatch trips, track payments and expenses, and generate invoices and reports.</p>
+      </div>
+      <div class="brand-foot">Complete Trucking Business Management System</div>
+    </section>
+
+    <section class="form-panel checking" id="formPanel">
+      <h1 id="panelTitle">Welcome back</h1>
+      <p class="sub" id="panelSub">Sign in to access your dashboard.</p>
+
+      <div class="error" id="loginError" role="alert"></div>
+      <form id="loginForm" novalidate>
+        <div class="field">
+          <label for="username">Username</label>
+          <input type="text" id="username" name="username" placeholder="Enter your username" autocomplete="username" required>
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" placeholder="Enter your password" autocomplete="current-password" required>
+        </div>
+        <button type="submit" class="btn-signin" id="signInBtn">Sign In</button>
+      </form>
+
+      <form id="changeForm" novalidate style="display:none">
+        <div class="field">
+          <label for="newPassword">New password</label>
+          <input type="password" id="newPassword" placeholder="At least 12 characters" autocomplete="new-password" required>
+        </div>
+        <div class="field">
+          <label for="newPassword2">Confirm new password</label>
+          <input type="password" id="newPassword2" placeholder="Type it again" autocomplete="new-password" required>
+        </div>
+        <p class="hint">Use a letter and a number, and do not include your username.</p>
+        <button type="submit" class="btn-signin" id="changeBtn">Save and Continue</button>
+      </form>
+
+      <div class="form-foot">Authorized personnel only</div>
+    </section>
+  </main>
+  <script>
+    (function () {
+      var KEY = 'limars_session';
+      var panel = document.getElementById('formPanel');
+      var form = document.getElementById('loginForm');
+      var btn = document.getElementById('signInBtn');
+      var errBox = document.getElementById('loginError');
+      var changeForm = document.getElementById('changeForm');
+      var changeBtn = document.getElementById('changeBtn');
+      var pendingToken = null, tempPassword = '';
+
+      function showError(msg) { errBox.textContent = msg; errBox.style.display = 'block'; }
+      function store(t) { try { sessionStorage.setItem(KEY, t); } catch (e) {} }
+      function read() { try { return sessionStorage.getItem(KEY); } catch (e) { return null; } }
+      function clear() { try { sessionStorage.removeItem(KEY); } catch (e) {} }
+      function ready() { panel.classList.remove('checking'); btn.disabled = false; btn.textContent = 'Sign In'; }
+
+      // Replaces this page with the dashboard once the server confirms the session.
+      function openApp(token, onFail) {
+        google.script.run
+          .withSuccessHandler(function (html) {
+            document.open(); document.write(html); document.close();
+            // Safety net in case the browser does not fire the load event for the rewritten page.
+            setTimeout(function () { if (!window.__appLoaded && typeof window.onload === 'function') window.onload(); }, 3000);
+          })
+          .withFailureHandler(function () { clear(); onFail(); })
+          .getApp(token);
+      }
+
+      // First sign-in with a temporary password: the employee must choose their own.
+      function showChangeStep() {
+        form.style.display = 'none'; changeForm.style.display = 'block';
+        document.getElementById('panelTitle').textContent = 'Set your password';
+        document.getElementById('panelSub').textContent = 'Your account was created with a temporary password. Choose a new one to continue.';
+        errBox.style.display = 'none'; ready();
+        document.getElementById('newPassword').focus();
+      }
+      changeForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var n1 = document.getElementById('newPassword').value, n2 = document.getElementById('newPassword2').value;
+        errBox.style.display = 'none';
+        if (n1.length < 12) { showError('The new password must be at least 12 characters.'); return; }
+        if (n1 !== n2) { showError('The two passwords do not match.'); return; }
+        changeBtn.disabled = true; changeBtn.textContent = 'Saving...';
+        google.script.run
+          .withSuccessHandler(function (res) {
+            if (!res || !res.success) { changeBtn.disabled = false; changeBtn.textContent = 'Save and Continue'; showError((res && res.message) || 'Could not change the password.'); return; }
+            store(pendingToken); tempPassword = '';
+            changeBtn.textContent = 'Loading dashboard...';
+            openApp(pendingToken, function () { changeBtn.disabled = false; changeBtn.textContent = 'Save and Continue'; showError('Could not open the dashboard. Please sign in again.'); });
+          })
+          .withFailureHandler(function () { changeBtn.disabled = false; changeBtn.textContent = 'Save and Continue'; showError('Could not reach the server. Please try again.'); })
+          .changePassword(pendingToken, tempPassword, n1);
+      });
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var u = document.getElementById('username').value.trim();
+        var p = document.getElementById('password').value;
+        errBox.style.display = 'none';
+        if (!u || !p) { showError('Enter your username and password.'); return; }
+        btn.disabled = true; btn.textContent = 'Signing in...';
+        google.script.run
+          .withSuccessHandler(function (res) {
+            if (!res || !res.success) { ready(); showError((res && res.message) || 'Sign in failed.'); document.getElementById('password').value = ''; return; }
+            if (res.mustChange) { pendingToken = res.token; tempPassword = p; showChangeStep(); return; }
+            store(res.token);
+            btn.textContent = 'Loading dashboard...';
+            openApp(res.token, function () { ready(); showError('Could not open the dashboard. Please try again.'); });
+          })
+          .withFailureHandler(function () { ready(); showError('Could not reach the server. Please try again.'); })
+          .login(u, p);
+      });
+
+      // Resume an existing session (e.g. after a page refresh).
+      var saved = read();
+      if (saved) { openApp(saved, ready); } else { ready(); }
+    })();
+  </script>
+</body>
+</html>

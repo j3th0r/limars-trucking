@@ -1,0 +1,2899 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script>
+    /* Session layer: routes every server call through the secured apiCall() entry point. */
+    (function () {
+      var TOKEN = window.__SESSION_TOKEN__ || '';
+      var realRun = google.script.run;
+      // Back to the sign-in page. A plain reload shows a blank frame inside Apps Script,
+      // so the browser's top-level window is sent to the web app address instead.
+      function goToLogin() {
+        try { sessionStorage.removeItem('limars_session'); } catch (e) {}
+        var url = window.__APP_URL__;
+        var box = document.createElement('div');
+        box.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#eef2f8;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:Inter,Segoe UI,Arial,sans-serif;color:#14284b;text-align:center;padding:24px';
+        box.innerHTML = '<div style="font-size:18px;font-weight:700;margin-bottom:6px">Signed out</div><div style="color:#64748b;font-size:14px">Returning to the sign-in page...</div>';
+        document.body.appendChild(box);
+        if (!url) { location.reload(); return; }
+        try { window.top.location.href = url; } catch (e) {}
+        // If the browser blocks the automatic redirect, offer a link (a click is always allowed).
+        setTimeout(function () {
+          box.innerHTML += '<a href="' + url + '" target="_top" style="margin-top:18px;padding:11px 22px;border-radius:9px;background:#14284b;color:#fff;font-weight:600;font-size:14px;text-decoration:none">Go to sign in</a>';
+        }, 2000);
+      }
+      function isAuthError(e) {
+        var m = String((e && e.message) || e);
+        return m.indexOf('AUTH_REQUIRED') > -1 || m.indexOf('PASSWORD_CHANGE_REQUIRED') > -1;
+      }
+      function expire() {
+        alert('Your session has ended. Please sign in again.');
+        goToLogin();
+      }
+      function make(s, f) {
+        return new Proxy({}, { get: function (t, name) {
+          if (name === 'withSuccessHandler') return function (fn) { return make(fn, f); };
+          if (name === 'withFailureHandler') return function (fn) { return make(s, fn); };
+          if (name === 'withUserObject') return function () { return make(s, f); };
+          if (name === 'changePassword') return function (cur, next) {
+            var r = realRun
+              .withSuccessHandler(s || function () {})
+              .withFailureHandler(function (e, o) { if (isAuthError(e)) { expire(); return; } if (f) f(e, o); else console.error(e); });
+            r.changePassword(TOKEN, cur, next);
+          };
+          return function () {
+            var args = Array.prototype.slice.call(arguments);
+            realRun
+              .withSuccessHandler(s || function () {})
+              .withFailureHandler(function (e, o) {
+                if (isAuthError(e)) { expire(); return; }
+                if (f) f(e, o); else console.error(e);
+              })
+              .apiCall(TOKEN, String(name), args);
+          };
+        } });
+      }
+      google.script.run = make(null, null);
+      window.signOut = function () {
+        realRun.withSuccessHandler(goToLogin).withFailureHandler(goToLogin).logout(TOKEN);
+      };
+      window.addEventListener('load', function () { window.__appLoaded = true; });
+    })();
+  </script>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reyna Advanced Tracker - Enhanced Edition</title>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* =====================================================
+       DESIGN TOKENS
+       (legacy variable names are kept so inline styles that
+        reference them keep working, but they now map to the
+        new professional palette)
+       ===================================================== */
+    :root {
+      --navy-950: #081a30;
+      --navy-900: #0b2545;
+      --navy-800: #13315c;
+      --navy-700: #1b4470;
+      --navy-100: #e6edf6;
+      --navy-50:  #f3f6fa;
+      --amber:      #f59e0b;
+      --amber-dark: #b45309;
+
+      --ink:      #0f172a;
+      --ink-2:    #334155;
+      --muted:    #64748b;
+      --line:     #e2e8f0;
+      --line-2:   #cbd5e1;
+      --page:     #f1f4f9;
+      --surface:  #ffffff;
+
+      --ok:     #15803d;
+      --warn:   #b45309;
+      --danger: #b91c1c;
+
+      --radius:    10px;
+      --radius-sm: 7px;
+      --shadow-sm: 0 1px 2px rgba(15,23,42,.06), 0 1px 3px rgba(15,23,42,.05);
+      --shadow-md: 0 4px 12px rgba(15,23,42,.08), 0 2px 4px rgba(15,23,42,.04);
+      --shadow-lg: 0 20px 50px rgba(8,26,48,.28);
+
+      /* legacy aliases */
+      --primary-red: var(--navy-900);
+      --primary-blue: var(--navy-700);
+      --dark-red: var(--navy-950);
+      --dark-blue: var(--navy-800);
+      --light-red: var(--navy-700);
+      --light-blue: var(--navy-700);
+      --bg-dark: var(--page);
+      --bg-card: var(--surface);
+      --text-light: var(--ink);
+      --text-gray: var(--muted);
+      --success: var(--ok);
+      --warning: var(--warn);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      font-family: 'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', Arial, sans-serif;
+      font-size: 14px; line-height: 1.5;
+      background: var(--page); color: var(--ink);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+      font-variant-numeric: tabular-nums;
+    }
+    .container { max-width: 1600px; margin: 0 auto; padding: 0; background: transparent; }
+    :focus-visible { outline: 2px solid var(--navy-700); outline-offset: 2px; }
+
+    /* =====================================================
+       HEADER + PERIOD FILTER
+       ===================================================== */
+    .header {
+      background: linear-gradient(135deg, var(--navy-950) 0%, var(--navy-900) 55%, var(--navy-800) 100%);
+      padding: 26px 32px 18px; margin-bottom: 0; position: relative;
+      border-bottom: 3px solid var(--accent);
+    }
+    .header h1 { font-size: 24px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #fff; margin-bottom: 4px; }
+    .header p { color: rgba(255,255,255,.68); font-size: 13px; font-weight: 400; opacity: 1; margin-bottom: 20px; }
+
+    .filter-bar {
+      background: transparent; padding: 14px 0 0; margin: 0; border-radius: 0; box-shadow: none;
+      display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+      border-top: 1px solid rgba(255,255,255,.12);
+    }
+    .filter-bar label { color: rgba(255,255,255,.72); font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: .08em; margin-right: 8px; }
+    .filter-btn {
+      background: transparent; border: 1px solid transparent; color: rgba(255,255,255,.82);
+      padding: 7px 14px; border-radius: 999px; cursor: pointer; transition: background .15s, color .15s, border-color .15s;
+      font-family: inherit; font-size: 12.5px; font-weight: 500;
+    }
+    .filter-btn:hover { background: rgba(255,255,255,.12); color: #fff; }
+    .filter-btn.active { background: #fff; color: var(--navy-900); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+
+    .custom-date-inputs { display: none; gap: 8px; align-items: center; margin-left: 6px; }
+    .custom-date-inputs.active { display: flex; flex-wrap: wrap; }
+    .custom-date-inputs input {
+      padding: 6px 10px; border: 1px solid rgba(255,255,255,.28); border-radius: var(--radius-sm);
+      background: rgba(255,255,255,.08); color: #fff; font-family: inherit; font-size: 12.5px; color-scheme: dark;
+    }
+    .custom-date-inputs button {
+      padding: 7px 16px; background: var(--accent); border: none; border-radius: var(--radius-sm);
+      color: var(--navy-950); cursor: pointer; font-family: inherit; font-weight: 700; font-size: 12.5px; transition: filter .15s;
+    }
+    .custom-date-inputs button:hover { filter: brightness(1.08); }
+
+    /* =====================================================
+       NAVIGATION
+       ===================================================== */
+    .nav-tabs {
+      display: flex; gap: 2px; margin-bottom: 0; flex-wrap: nowrap; overflow-x: auto;
+      background: var(--surface); padding: 0 24px; border-bottom: 1px solid var(--line);
+      box-shadow: var(--shadow-sm); position: sticky; top: 0; z-index: 50; scrollbar-width: thin;
+    }
+    .nav-tab {
+      background: transparent; border: none; border-bottom: 3px solid transparent; color: var(--muted);
+      padding: 15px 16px 12px; border-radius: 0; cursor: pointer; transition: color .15s, background .15s, border-color .15s;
+      font-family: inherit; font-size: 13.5px; font-weight: 600; display: flex; align-items: center; gap: 7px; white-space: nowrap;
+    }
+    .nav-tab:hover { color: var(--navy-900); background: var(--navy-50); }
+    .nav-tab.active { background: transparent; color: var(--navy-900); border-bottom-color: var(--accent); box-shadow: none; }
+
+    .content-section { display: none; padding: 28px 32px 40px; }
+    .content-section.active { display: block; animation: fadeIn .25s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* =====================================================
+       KPI CARDS
+       ===================================================== */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 18px; margin-bottom: 26px; }
+    .stat-card {
+      background: var(--surface); padding: 20px 22px; border-radius: var(--radius);
+      border: 1px solid var(--line); border-top: 4px solid var(--navy-700);
+      box-shadow: var(--shadow-sm); transition: box-shadow .2s, transform .2s;
+    }
+    .stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+    .stat-card.red-card   { border-top-color: #1d4ed8; }
+    .stat-card.blue-card  { border-top-color: #0f766e; }
+    .stat-card.cyan-card  { border-top-color: #d97706; }
+    .stat-card.navy-card  { border-top-color: #15803d; }
+    .stat-card.teal-card  { border-top-color: #be123c; }
+    .stat-card.pink-card  { border-top-color: #6d28d9; }
+    .stat-card h3 { color: var(--muted); font-size: 11.5px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: .08em; font-weight: 600; }
+    .stat-value { font-size: 28px; font-weight: 700; color: var(--navy-900); margin-bottom: 4px; letter-spacing: -.01em; }
+    .stat-change { font-size: 12px; color: var(--muted); font-weight: 500; }
+
+    /* =====================================================
+       CARDS / PANELS
+       ===================================================== */
+    .chart-container {
+      background: var(--surface); padding: 24px; border-radius: var(--radius); margin-bottom: 20px;
+      border: 1px solid var(--line); box-shadow: var(--shadow-sm);
+    }
+    .chart-container h2, .form-container > h2 {
+      color: var(--navy-900) !important; font-size: 16px !important; font-weight: 700; letter-spacing: -.005em;
+      margin: 0 0 18px !important; padding-bottom: 12px; border-bottom: 1px solid var(--line);
+    }
+    #tripFormTitle span { color: var(--accent-dark) !important; }
+
+    .creditors-list { max-height: 400px; overflow-y: auto; padding-right: 4px; }
+    .creditor-item {
+      background: var(--navy-50); padding: 13px 16px; border-radius: var(--radius-sm); margin-bottom: 8px;
+      display: flex; justify-content: space-between; align-items: center; gap: 12px;
+      border: 1px solid var(--line); border-left: 4px solid var(--accent); cursor: pointer; transition: background .15s, box-shadow .15s;
+    }
+    .creditor-item:hover { background: #fff; box-shadow: var(--shadow-md); }
+    .creditor-name { font-weight: 600; color: var(--ink); }
+    .creditor-balance { font-size: 16px; font-weight: 700; color: var(--warn); white-space: nowrap; }
+    .creditor-details { font-size: 12px; color: var(--muted); margin-top: 3px; }
+
+    .creditors-list::-webkit-scrollbar, .nav-tabs::-webkit-scrollbar, [id$="TableContainer"]::-webkit-scrollbar { width: 8px; height: 8px; }
+    .creditors-list::-webkit-scrollbar-thumb, .nav-tabs::-webkit-scrollbar-thumb, [id$="TableContainer"]::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 8px; }
+
+    /* =====================================================
+       FORMS
+       ===================================================== */
+    .form-container {
+      background: var(--surface); padding: 28px; border-radius: var(--radius); max-width: none;
+      border: 1px solid var(--line); box-shadow: var(--shadow-sm);
+    }
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 4px 20px; margin-bottom: 8px; }
+    .form-group { margin-bottom: 18px; }
+    .form-group label { display: block; margin-bottom: 6px; color: var(--ink-2); font-size: 12.5px; font-weight: 600; letter-spacing: .01em; }
+    .form-group input, .form-group select, .form-group textarea,
+    .trip-truck-plate, .trip-helper-select, .trip-helper-pay {
+      width: 100%; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: var(--radius-sm);
+      background: #fff; color: var(--ink); font-family: inherit; font-size: 14px;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .trip-truck-plate, .trip-helper-select, .trip-helper-pay {
+      background: #fff !important; color: var(--ink) !important; border: 1px solid var(--line-2) !important;
+      border-radius: var(--radius-sm) !important; padding: 10px 12px !important; width: auto;
+    }
+    .form-group input::placeholder, .form-group textarea::placeholder, .trip-helper-pay::placeholder { color: #94a3b8; }
+    .form-group input:hover, .form-group select:hover, .form-group textarea:hover { border-color: #94a3b8; }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus,
+    .trip-truck-plate:focus, .trip-helper-select:focus, .trip-helper-pay:focus {
+      outline: none; border-color: var(--navy-700) !important; box-shadow: 0 0 0 3px rgba(27,68,112,.15);
+    }
+    .form-group textarea { resize: vertical; }
+    .form-container hr { border: 0 !important; border-top: 1px solid var(--line) !important; margin: 10px 0 22px !important; }
+    #customerBalanceInfo { background: var(--navy-50) !important; border: 1px solid var(--line); padding: 16px !important; border-radius: var(--radius-sm) !important; }
+    #customerBalanceInfo span { color: var(--ink-2); font-weight: 500; }
+
+    /* =====================================================
+       BUTTONS
+       ===================================================== */
+    .btn {
+      padding: 10px 22px; border: 1px solid transparent; border-radius: var(--radius-sm); cursor: pointer;
+      font-family: inherit; font-size: 12.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em;
+      transition: background .15s, box-shadow .15s, transform .1s, border-color .15s, color .15s; margin-right: 8px; margin-bottom: 4px;
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn-primary { background: var(--navy-900); color: #fff; box-shadow: var(--shadow-sm); }
+    .btn-primary:hover { background: var(--navy-700); box-shadow: var(--shadow-md); transform: none; }
+    .btn-secondary { background: #fff; color: var(--navy-800); border-color: var(--line-2); }
+    .btn-secondary:hover { background: var(--navy-50); border-color: var(--navy-700); box-shadow: none; transform: none; }
+    .btn-success { background: var(--ok); color: #fff; }
+    .btn-success:hover { filter: brightness(1.08); }
+    .btn-danger { background: var(--danger); color: #fff; padding: 9px 13px; }
+    .btn-danger:hover { filter: brightness(1.1); }
+    .btn-primary:disabled, .btn-secondary:disabled { opacity: .55; cursor: not-allowed; }
+    /* table action buttons that use the colour classes without .btn */
+    .data-table .btn-success, .data-table .btn-danger { font-size: 13px; line-height: 1; transition: filter .15s; }
+
+    .invoice-btn {
+      background: var(--navy-700); color: #fff; border: none; padding: 7px 12px; border-radius: 6px; cursor: pointer;
+      font-size: 12px; font-weight: 600; transition: filter .15s, transform .1s;
+    }
+    .invoice-btn:hover { background: var(--navy-800); transform: none; filter: brightness(1.1); }
+    .data-table td .invoice-btn, .data-table td .btn-success, .data-table td .btn-danger { margin-right: 4px; }
+
+    /* =====================================================
+       TABLES
+       ===================================================== */
+    [id$="TableContainer"] { overflow-x: auto; }
+    .data-table { width: 100%; border-collapse: separate; border-spacing: 0; margin-top: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; }
+    .data-table thead { background: var(--navy-900); }
+    .data-table th { padding: 12px 16px; text-align: left; font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: .07em; color: #fff; white-space: nowrap; }
+    .data-table td { padding: 12px 16px; border-bottom: 1px solid var(--line); color: var(--ink-2); vertical-align: middle; }
+    .data-table tbody tr:nth-child(even) { background: #fafbfd; }
+    .data-table tbody tr:last-child td { border-bottom: none; }
+    .data-table tbody tr { transition: background .12s; }
+    .data-table tbody tr:hover { background: var(--navy-50); }
+    .clickable-row { cursor: pointer; }
+    .highlight { background-color: #fef3c7 !important; }
+
+    .search-box { background: var(--navy-50); padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
+    .search-box input { flex: 1; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: var(--radius-sm); background: #fff; color: var(--ink); font-family: inherit; font-size: 14px; }
+    .search-box input:focus { outline: none; border-color: var(--navy-700); box-shadow: 0 0 0 3px rgba(27,68,112,.15); }
+    .search-box button { padding: 10px 18px; background: var(--navy-900); border: none; border-radius: var(--radius-sm); color: #fff; cursor: pointer; font-family: inherit; font-weight: 600; font-size: 13px; transition: background .15s; }
+    .search-box button:hover { background: var(--navy-700); }
+    .search-results-count { color: var(--muted); font-size: 12.5px; margin-bottom: 10px; }
+
+    /* =====================================================
+       LOADING / ALERT / MODAL
+       ===================================================== */
+    .loading { display: none; position: fixed; inset: 0; background: rgba(8,26,48,.62); backdrop-filter: blur(2px); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; }
+    .loading.active { display: flex; }
+    .spinner { border: 4px solid rgba(255,255,255,.22); border-top: 4px solid var(--accent); border-radius: 50%; width: 46px; height: 46px; animation: spin .9s linear infinite; margin-bottom: 16px; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .loading-text { color: #fff; font-size: 14px; font-weight: 500; letter-spacing: .02em; }
+
+    .alert { padding: 14px 18px; border-radius: var(--radius-sm); margin-bottom: 20px; display: none; position: fixed; top: 20px; right: 20px; z-index: 10000; max-width: 400px; font-weight: 500; box-shadow: var(--shadow-lg); animation: slideIn .3s; }
+    @keyframes slideIn { from { transform: translateX(400px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    .alert.success { background: #166534; border: 1px solid #14532d; border-left: 5px solid #4ade80; color: #fff; }
+    .alert.error   { background: #991b1b; border: 1px solid #7f1d1d; border-left: 5px solid #fca5a5; color: #fff; }
+
+    .modal { display: none; position: fixed; z-index: 1000; inset: 0; overflow: auto; background: rgba(8,26,48,.62); backdrop-filter: blur(2px); }
+    .modal-content { background: var(--surface); margin: 5% auto; padding: 30px; border: none; border-radius: 14px; width: 90%; max-width: 1000px; max-height: 85vh; overflow-y: auto; box-shadow: var(--shadow-lg); }
+    .modal-content h2 { color: var(--navy-900) !important; font-size: 18px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+    .modal-content h3 { color: var(--ink); }
+    .close { color: var(--muted); float: right; font-size: 28px; line-height: 1; font-weight: 400; cursor: pointer; transition: color .15s; }
+    .close:hover { color: var(--ink); }
+
+    /* =====================================================
+       CALCULATOR
+       ===================================================== */
+    .calculator-result { background: linear-gradient(135deg, var(--navy-900) 0%, var(--navy-800) 100%); padding: 24px; border-radius: var(--radius); margin-top: 24px; color: #fff; box-shadow: var(--shadow-md); }
+    .calculator-result h3 { color: #fff; margin-bottom: 12px; font-size: 16px; }
+    .result-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,.14); color: rgba(255,255,255,.88); }
+    .result-row:last-child { border-bottom: none; font-size: 17px; font-weight: 700; color: #fff; }
+    .result-row:nth-last-child(2) { color: #fcd34d; font-weight: 700; }
+
+    /* =====================================================
+       INVOICE / PAYROLL / REPORT DOCUMENTS
+       ===================================================== */
+    .invoice-container, .payroll-invoice-container, .pl-report-container, .report-content > div {
+      background: #fff !important; border: 1px solid var(--line); border-radius: var(--radius) !important;
+      box-shadow: var(--shadow-sm); color: var(--ink-2);
+    }
+    .invoice-container { padding: 44px; margin-top: 20px; }
+    .invoice-header { text-align: center; border-bottom: 3px solid var(--navy-900); padding-bottom: 22px; margin-bottom: 30px; }
+    .invoice-company-name { font-size: 26px; font-weight: 800; color: var(--navy-900); margin-bottom: 8px; letter-spacing: -.01em; }
+    .invoice-title { font-size: 15px; color: var(--accent-dark); font-weight: 700; text-transform: uppercase; letter-spacing: .18em; margin-top: 16px; }
+    .invoice-info { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 28px 0; }
+    .invoice-section { background: var(--navy-50); padding: 18px 20px; border-radius: var(--radius-sm); border: 1px solid var(--line); border-left: 4px solid var(--navy-700); }
+    .invoice-section h3 { font-size: 12px !important; letter-spacing: .1em; text-transform: uppercase; }
+    .invoice-row { display: flex; justify-content: space-between; margin: 7px 0; color: var(--ink-2); }
+    .invoice-row strong { color: var(--navy-900); }
+    .invoice-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    .invoice-table th { background: var(--navy-900); color: #fff; padding: 12px 14px; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+    .invoice-table td { border-bottom: 1px solid var(--line); padding: 14px; color: var(--ink-2); }
+    .invoice-total { text-align: right; margin-top: 30px; background: var(--navy-50); padding: 20px; border-radius: var(--radius-sm); }
+    .invoice-grand-total { font-size: 26px; font-weight: 800; color: var(--navy-900); margin-top: 14px; padding-top: 14px; border-top: 2px solid var(--navy-900); }
+    .invoice-footer { margin-top: 50px; text-align: center; font-size: 12px; color: var(--muted); padding-top: 20px; border-top: 1px solid var(--line); }
+    .invoice-actions, .payroll-actions { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+    .invoice-actions .btn, .payroll-actions .btn { margin-right: 0; }
+    .payroll-invoice-container { padding: 36px; color: var(--ink-2); }
+
+    .report-selector { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 20px; padding: 5px; background: var(--navy-50); border: 1px solid var(--line); border-radius: 12px; width: fit-content; max-width: 100%; }
+    .report-btn { background: transparent; border: none; color: var(--ink-2); padding: 9px 16px; border-radius: 8px; cursor: pointer; transition: background .15s, color .15s; font-family: inherit; font-size: 13px; font-weight: 600; }
+    .report-btn:hover { background: #fff; color: var(--navy-900); transform: none; }
+    .report-btn.active { background: var(--navy-900); color: #fff; box-shadow: var(--shadow-sm); }
+    .report-content { display: none; }
+    .report-content.active { display: block; }
+    .report-content > div { padding: 44px !important; }
+
+    .pl-report-container { padding: 44px; color: var(--ink-2); }
+    .pl-header { text-align: center; border-bottom: 3px solid var(--navy-900); padding-bottom: 22px; margin-bottom: 30px; }
+    .pl-section { margin: 28px 0; }
+    .pl-section-title { color: var(--navy-900); font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 12px; border-bottom: 2px solid var(--navy-900); padding-bottom: 8px; }
+    .pl-item { display: flex; justify-content: space-between; padding: 7px 0; color: var(--ink-2); border-bottom: 1px dotted var(--line); }
+    .pl-total { font-weight: 700; color: var(--navy-900); border-top: 2px solid var(--navy-900); border-bottom: none; margin-top: 10px; padding-top: 10px; }
+    .pl-grand-total { font-size: 19px; font-weight: 800; color: var(--navy-900); border-top: 3px double var(--navy-900); border-bottom: none; margin-top: 14px; padding-top: 14px; }
+
+    /* Re-skin the inline blue/orange/green that is generated by the scripts
+       inside invoices, payroll slips and reports (colour only; no layout) */
+    :is(.invoice-container, .report-content, #payrollInvoice) [style*="1565c0"],
+    :is(.invoice-container, .report-content, #payrollInvoice) [style*="0d47a1"] { color: var(--navy-900) !important; border-color: var(--navy-900) !important; }
+    :is(.invoice-container, .report-content, #payrollInvoice) [style*="background: #1565c0"] { background: var(--navy-900) !important; }
+    :is(.invoice-container, .report-content, #payrollInvoice) [style*="background: #e3f2fd"] { background: var(--navy-50) !important; border: 1px solid var(--line); }
+    :is(.invoice-container, .report-content, #payrollInvoice) [style*="background: #1565c0"],
+    :is(.invoice-container, .report-content, #payrollInvoice) [style*="background: #1565c0"] th { color: #fff !important; }
+    :is(.invoice-container, .report-content, #payrollInvoice) td[style*="1565c0"],
+    :is(.invoice-container, .report-content, #payrollInvoice) td[style*="border-bottom"] { color: var(--ink-2) !important; border-color: var(--line) !important; }
+    .report-content table { color: var(--ink-2) !important; }
+    .report-content table td { border-color: var(--line) !important; }
+    .report-content table tbody tr:nth-child(even) { background: #fafbfd; }
+    :is(.report-content, .invoice-container) [style*="ff9800"] { color: var(--warn) !important; }
+    :is(.report-content, .invoice-container) [style*="4caf50"] { color: var(--ok) !important; }
+    :is(.report-content, .invoice-container) [style*="c62828"] { color: var(--danger) !important; }
+    :is(.invoice-container) [style*="background: #f8f9fa"] { background: var(--navy-50) !important; border-color: var(--line) !important; }
+
+    /* =====================================================
+       LAYOUT HELPERS + RESPONSIVE
+       ===================================================== */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+
+    @media (max-width: 1024px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+    @media (max-width: 768px) {
+      .header { padding: 20px 18px 14px; }
+      .header h1 { font-size: 20px; }
+      .content-section { padding: 18px 14px 32px; }
+      .nav-tabs { flex-direction: row; padding: 0 8px; }
+      .stats-grid, .form-grid { grid-template-columns: 1fr; }
+      .filter-bar { flex-direction: row; align-items: center; }
+      .invoice-info { grid-template-columns: 1fr; }
+      .invoice-container, .report-content > div, .pl-report-container, .payroll-invoice-container { padding: 22px !important; }
+      .form-container, .chart-container { padding: 18px; }
+      .report-selector { width: 100%; }
+      .modal-content { margin: 10% auto; padding: 20px; }
+    }
+
+    @media print {
+      body { background: #fff; color: #000; }
+      .header, .nav-tabs, .filter-bar, .btn, .payroll-actions, .invoice-actions { display: none !important; }
+      .payroll-invoice-container, .invoice-container, .report-content, .pl-report-container { box-shadow: none; border: none; page-break-after: always; }
+    }
+
+    /* =====================================================
+       v3 — Fleet-dashboard look: top bar, pill nav, 6-up KPI row
+       ===================================================== */
+    :root {
+      --navy-950:#0c1a33; --navy-900:#14284b; --navy-800:#1d3a6d; --navy-700:#2a4f93; --navy-100:#e3eaf6; --navy-50:#f4f7fc;
+      --accent:#2563eb; --accent-dark:#1d4ed8;
+      --page:#eef2f8; --line:#e3e8f0;
+      --gutter: max(24px, calc((100% - 1440px) / 2 + 24px));
+    }
+    body { background: var(--page); }
+    .container { max-width: none; }
+    .content-section { max-width: 1440px; margin: 0 auto; padding: 26px 24px 48px; }
+
+    /* Top bar: brand (left) + period filter (right) */
+    .header { display: grid; grid-template-columns: auto 1fr; grid-template-areas: "brand filters" "sub filters"; align-items: center; column-gap: 32px; row-gap: 0;
+      padding: 14px var(--gutter); background: #fff; border-bottom: 1px solid var(--line); box-shadow: none; position: relative; }
+    .header h1 { grid-area: brand; display: flex; align-items: center; gap: 12px; margin: 0; font-size: 19px; font-weight: 800; letter-spacing: .05em; color: var(--navy-900); text-transform: uppercase; line-height: 1.1; }
+    .header h1::before { content: 'L'; display: grid; place-items: center; width: 38px; height: 38px; flex: none; border-radius: 10px; color: #fff; font-size: 18px; letter-spacing: 0;
+      background: linear-gradient(135deg, var(--navy-900), var(--accent)); box-shadow: 0 4px 10px rgba(37,99,235,.28); }
+    .header p { grid-area: sub; margin: 3px 0 0 50px; max-width: 430px; font-size: 11.5px; line-height: 1.35; color: var(--muted); }
+    .filter-bar { grid-area: filters; justify-self: end; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0; padding: 0; border: 0; }
+    .filter-bar label { color: var(--muted); font-size: 11px; letter-spacing: .08em; margin-right: 4px; }
+    .filter-btn { background: #fff; border: 1px solid var(--line); color: var(--ink-2); border-radius: 999px; padding: 7px 15px; font-size: 12.5px; font-weight: 600; }
+    .filter-btn:hover { background: #fff; border-color: var(--accent); color: var(--accent); }
+    .filter-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: 0 2px 8px rgba(37,99,235,.30); }
+    .custom-date-inputs input { background: #fff; color: var(--ink); border: 1px solid var(--line-2); color-scheme: light; }
+    .custom-date-inputs button { background: var(--accent); color: #fff; border-radius: 999px; padding: 7px 16px; }
+
+    /* Pill navigation */
+    .nav-tabs { display: flex; flex-wrap: nowrap; gap: 6px; overflow-x: auto; padding: 10px var(--gutter); background: #fff; border-bottom: 1px solid var(--line); box-shadow: var(--shadow-sm); position: sticky; top: 0; z-index: 50; }
+    .nav-tab { border: 0; border-radius: 8px; padding: 8px 16px; font-size: 13.5px; font-weight: 600; color: var(--ink-2); background: transparent; box-shadow: none; }
+    .nav-tab:hover { background: var(--navy-50); color: var(--navy-900); }
+    .nav-tab.active { background: var(--navy-900); color: #fff; border: 0; box-shadow: 0 2px 8px rgba(20,40,75,.25); }
+
+    /* KPI row */
+    .stats-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px; }
+    .stat-card { padding: 16px 16px 14px; border: 1px solid var(--line); border-top: 3px solid var(--navy-700); border-radius: 12px; }
+    .stat-card.red-card { border-top-color: #2563eb; } .stat-card.blue-card { border-top-color: #0d9488; } .stat-card.cyan-card { border-top-color: #f59e0b; }
+    .stat-card.navy-card { border-top-color: #16a34a; } .stat-card.teal-card { border-top-color: #dc2626; } .stat-card.pink-card { border-top-color: #7c3aed; }
+    .stat-card h3 { font-size: 10.5px; letter-spacing: .09em; margin-bottom: 8px; }
+    .stat-value { font-size: clamp(18px, 1.55vw, 23px); font-weight: 800; letter-spacing: -.02em; }
+    .stat-change { font-size: 11.5px; }
+
+    /* Cards */
+    .chart-container, .form-container { border-radius: 14px; box-shadow: var(--shadow-sm); }
+    .chart-container h2, .form-container > h2 { font-size: 15.5px !important; margin: 0 0 16px !important; padding-bottom: 0; border-bottom: 0; }
+
+    /* Buttons */
+    .btn { text-transform: none; letter-spacing: 0; font-size: 13.5px; font-weight: 600; padding: 10px 20px; border-radius: 9px; }
+    .btn-primary { background: var(--navy-900); color: #fff; box-shadow: 0 2px 6px rgba(20,40,75,.25); }
+    .btn-primary:hover { background: var(--navy-700); box-shadow: 0 4px 12px rgba(20,40,75,.28); }
+    .btn-secondary { background: #fff; color: var(--navy-900); border: 1px solid var(--line-2); }
+    .btn-secondary:hover { background: var(--navy-50); color: var(--navy-900); border-color: var(--navy-700); }
+    .btn-success { background: #0f766e; color: #fff; }
+    .btn-danger { background: #fff; color: #b91c1c; border: 1px solid #fecaca; padding: 9px 14px; }
+    .btn-danger:hover { background: #fee2e2; filter: none; }
+    .search-box button { border-radius: 9px; background: var(--navy-900); }
+
+    /* Table row actions (text buttons) */
+    .data-table td .invoice-btn, .data-table td .btn-success, .data-table td .btn-danger {
+      padding: 6px 12px !important; font-size: 12px !important; font-weight: 600; line-height: 1.2; border-radius: 8px !important;
+      background: #fff !important; color: var(--navy-900) !important; border: 1px solid var(--line-2) !important; margin-right: 4px; cursor: pointer; filter: none; }
+    .data-table td .invoice-btn:hover, .data-table td .btn-success:hover { background: var(--navy-50) !important; border-color: var(--accent) !important; color: var(--accent) !important; }
+    .data-table td .btn-danger { color: #b91c1c !important; border-color: #fecaca !important; }
+    .data-table td .btn-danger:hover { background: #fee2e2 !important; border-color: #dc2626 !important; }
+
+    /* Tables + report tabs */
+    .data-table thead { background: var(--navy-50); }
+    .data-table th { color: var(--muted); border-bottom: 1px solid var(--line); }
+    .report-selector { background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 4px; gap: 4px; width: fit-content; max-width: 100%; }
+    .report-btn { border-radius: 999px; padding: 8px 18px; }
+    .report-btn:hover { background: var(--navy-50); }
+    .report-btn.active { background: var(--navy-900); color: #fff; }
+
+    @media (max-width: 1280px) { .stats-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    @media (max-width: 900px) {
+      .header { grid-template-columns: 1fr; grid-template-areas: "brand" "sub" "filters"; row-gap: 8px; }
+      .filter-bar { justify-self: start; }
+      .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 560px) { .stats-grid { grid-template-columns: 1fr; } .content-section { padding: 18px 14px 32px; } }
+
+
+    .usr-note { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+    .usr-temp { font-family: Consolas, 'Courier New', monospace; font-size: 24px; font-weight: 700; letter-spacing: .06em; text-align: center;
+      color: var(--navy-900); background: var(--navy-50); border: 1px dashed var(--navy-700); border-radius: 10px; padding: 18px 12px; margin: 14px 0; user-select: all; }
+    .usr-badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700; }
+    .usr-badge.on { background: #dcfce7; color: #166534; } .usr-badge.off { background: #fee2e2; color: #991b1b; } .usr-badge.wait { background: #fef3c7; color: #92400e; }
+
+    /* Account dropdown */
+    .acct { margin-left: auto; flex: none; align-self: center; }
+    .acct-trigger { display: flex; align-items: center; gap: 10px; padding: 5px 12px 5px 6px !important; border: 1px solid var(--line) !important; background: #fff; }
+    .acct-trigger.active { border-color: var(--navy-900) !important; }
+    .acct-avatar { width: 30px; height: 30px; flex: none; border-radius: 50%; display: grid; place-items: center; background: var(--navy-900); color: #fff; font-size: 13px; font-weight: 700; }
+    .nav-tab.active .acct-avatar { background: #fff; color: var(--navy-900); }
+    .acct-name { max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .acct-caret { width: 7px; height: 7px; margin: 0 2px 3px 2px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); transition: transform .15s; }
+    .acct-trigger[aria-expanded="true"] .acct-caret { transform: rotate(-135deg); margin-bottom: 0; margin-top: 4px; }
+    .acct-menu { display: none; position: fixed; z-index: 200; min-width: 250px; padding: 6px; background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-lg); }
+    .acct-menu.open { display: block; animation: fadeIn .12s ease-out; }
+    .acct-head { padding: 10px 12px 12px; margin-bottom: 6px; border-bottom: 1px solid var(--line); }
+    .acct-head-name { font-size: 14px; font-weight: 700; color: var(--navy-900); }
+    .acct-head-sub { margin-top: 2px; font-size: 12px; color: var(--muted); }
+    .acct-item { display: block; width: 100%; padding: 9px 12px; border: 0; border-radius: 8px; background: transparent; text-align: left; font-family: inherit; font-size: 13.5px; font-weight: 600; color: var(--ink-2); cursor: pointer; }
+    .acct-item:hover { background: var(--navy-50); color: var(--navy-900); }
+    .acct-item.active { background: transparent; color: var(--ink-2); box-shadow: none; }
+    .acct-item.danger, .acct-item.danger:hover { color: #b91c1c; }
+    .acct-item.danger:hover { background: #fef2f2; }
+    .acct-sep { height: 1px; margin: 6px 0; background: var(--line); }
+    @media (max-width: 700px) { .acct-name { display: none; } .acct-trigger { padding-right: 10px !important; } }
+
+    .data-table td .invoice-btn[data-type] { white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>LIMARS TRACKER</h1>
+      <p>Complete Trucking Business Management System - Enhanced Edition with BIR Invoicing</p>
+      
+      <div class="filter-bar">
+        <label>Filter Period:</label>
+        <button class="filter-btn active" onclick="applyFilter('month')">This Month</button>
+        <button class="filter-btn" onclick="applyFilter('today')">Today</button>
+        <button class="filter-btn" onclick="applyFilter('yesterday')">Yesterday</button>
+        <button class="filter-btn" onclick="applyFilter('lastWeek')">Last 7 Days</button>
+        <button class="filter-btn" onclick="applyFilter('year')">This Year</button>
+        <button class="filter-btn" onclick="applyFilter('custom')">Custom Range</button>
+        <div class="custom-date-inputs" id="customDateInputs">
+          <input type="date" id="customStartDate">
+          <span style="color: #ffffff;">to</span>
+          <input type="date" id="customEndDate">
+          <button onclick="applyCustomFilter()">Apply</button>
+        </div>
+      </div>
+    </div>
+    
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="showSection('dashboard')">Dashboard</button>
+      <button class="nav-tab" onclick="showSection('trips')">Trips</button>
+      <button class="nav-tab" onclick="showSection('payments')">Payments</button>
+      <button class="nav-tab" onclick="showSection('trucks')">Trucks</button>
+      <button class="nav-tab" onclick="showSection('drivers')">Drivers</button>
+      <button class="nav-tab" onclick="showSection('helpers')">Helpers</button>
+      <button class="nav-tab" onclick="showSection('customers')">Customers</button>
+      <button class="nav-tab" onclick="showSection('expenses')">Expenses</button>
+      <button class="nav-tab" onclick="showSection('calculator')">Calculator</button>
+      <button class="nav-tab" onclick="showSection('payroll')">Payroll</button>
+      <button class="nav-tab" onclick="showSection('reports')">Reports</button>
+      <div class="acct" id="acct">
+        <button type="button" class="nav-tab acct-trigger" id="acctBtn" onclick="usrToggleMenu(event)" aria-haspopup="true" aria-expanded="false">
+          <span class="acct-avatar" id="acctAvatar"></span><span class="acct-name" id="acctName"></span><span class="acct-caret"></span>
+        </button>
+        <div class="acct-menu" id="acctMenu" role="menu">
+          <div class="acct-head"><div class="acct-head-name" id="acctHeadName"></div><div class="acct-head-sub" id="acctHeadSub"></div></div>
+          <button type="button" class="acct-item" id="usersNavBtn" role="menuitem" onclick="usrGoUsers(event)">Users</button>
+          <button type="button" class="acct-item" role="menuitem" onclick="usrCloseMenu(); usrOpenChangePw()">Change Password</button>
+          <div class="acct-sep"></div>
+          <button type="button" class="acct-item danger" role="menuitem" onclick="usrCloseMenu(); signOut()">Sign Out</button>
+        </div>
+      </div>
+    </div>
+    
+    <div id="loading" class="loading">
+      <div class="spinner"></div>
+      <div class="loading-text">Loading data...</div>
+    </div>
+    
+    <div id="alert" class="alert"></div>
+    
+    <!-- Dashboard Section -->
+    <div id="dashboard" class="content-section active">
+      <!-- UPDATED METRICS CARDS -->
+      <div class="stats-grid">
+        <div class="stat-card red-card">
+          <h3>TOTAL REVENUE</h3>
+          <div class="stat-value" id="totalRevenue">₱0.00</div>
+          <div class="stat-change" id="revenueChange">From selected period</div>
+        </div>
+        <div class="stat-card blue-card">
+          <h3>GROSS PROFIT</h3>
+          <div class="stat-value" id="grossProfit">₱0.00</div>
+          <div class="stat-change" id="grossMargin">0% margin</div>
+        </div>
+        <div class="stat-card cyan-card">
+          <h3>OPERATING EXPENSES</h3>
+          <div class="stat-value" id="operatingExpenses">₱0.00</div>
+          <div class="stat-change">Overhead & Admin</div>
+        </div>
+        <div class="stat-card navy-card">
+          <h3>NET PROFIT</h3>
+          <div class="stat-value" id="netProfit">₱0.00</div>
+          <div class="stat-change" id="profitMargin">0% margin</div>
+        </div>
+        <div class="stat-card teal-card">
+          <h3>ACCOUNT RECEIVABLES</h3>
+          <div class="stat-value" id="totalReceivables">₱0.00</div>
+          <div class="stat-change">Outstanding balance</div>
+        </div>
+        <div class="stat-card pink-card">
+          <h3>PAYMENTS RECEIVED</h3>
+          <div class="stat-value" id="totalPayments">₱0.00</div>
+          <div class="stat-change">In selected period</div>
+        </div>
+      </div>
+      
+      <div class="chart-container">
+        <h2>Revenue & Expenses Trend</h2>
+        <canvas id="monthlyTrendChart" height="80"></canvas>
+      </div>
+      
+      <div class="grid-2">
+        <div class="chart-container">
+          <h2>Operating Expense Breakdown</h2>
+          <canvas id="expenseChart" height="200"></canvas>
+        </div>
+        <div class="chart-container">
+          <h2>Top Creditors (Outstanding Balance)</h2>
+          <div class="creditors-list" id="creditorsList">
+            <p style="color: var(--text-gray);">No outstanding balances</p>
+          </div>
+        </div>
+      </div>
+      
+      <div class="grid-2">
+        <div class="chart-container">
+          <h2>Top Routes</h2>
+          <canvas id="routesChart" height="200"></canvas>
+        </div>
+        <div class="chart-container">
+          <h2>Driver Performance</h2>
+          <canvas id="driverChart" height="200"></canvas>
+        </div>
+      </div>
+    </div>
+
+<!-- Trips Section -->
+<div id="trips" class="content-section">
+  <div class="form-container">
+    <!-- Hidden field to store Trip ID during editing -->
+    <input type="hidden" id="editTripId" value="">
+    <h2 id="tripFormTitle" style="color: var(--primary-red); margin-bottom: 20px;">Add New Trip</h2>
+    
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Date</label>
+        <input type="date" id="tripDate" required>
+      </div>
+      <div class="form-group">
+        <label>Customer</label>
+        <select id="tripCustomer" required>
+          <option value="">Select Customer</option>
+        </select>
+      </div>
+    </div>
+
+    <hr style="border-color: #444; margin: 20px 0;">
+
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Freight / Trip Rate (₱)</label>
+        <input type="number" id="tripRate" step="0.01" required>
+      </div>
+      <div class="form-group">
+        <label>Customer Subsidy (₱)</label>
+        <input type="number" id="tripSubsidy" step="0.01" value="0">
+      </div>
+      <div class="form-group">
+        <label>Tax Type</label>
+        <select id="tripVatStatus">
+          <option value="VAT">VAT (12%)</option>
+          <option value="Non-VAT">Non-VAT / Exempt</option>
+        </select>
+      </div>
+    </div>
+
+    <hr style="border-color: #444; margin: 20px 0;">
+
+    <div class="form-group">
+      <label style="color: var(--primary-blue); font-size: 16px;">Trucks Used</label>
+      <div id="trucksContainer"></div>
+      <button type="button" class="btn btn-secondary" onclick="addTruckRow()" style="margin-top: 10px;">Add Truck</button>
+    </div>
+
+    <hr style="border-color: #444; margin: 20px 0;">
+
+    <div class="form-grid">
+      <div class="form-group">
+        <label style="color: var(--primary-blue); font-size: 16px;">Lead Driver</label>
+        <select id="tripDriver" required></select>
+      </div>
+      <div class="form-group">
+        <label>Driver Pay (₱)</label>
+        <input type="number" id="tripDriverPay" step="0.01" required>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label style="color: var(--primary-blue); font-size: 16px;">Helpers</label>
+      <div id="helpersContainer"></div>
+      <button type="button" class="btn btn-secondary" onclick="addHelperRow()" style="margin-top: 10px;">Add Helper</button>
+    </div>
+
+    <hr style="border-color: #444; margin: 20px 0;">
+
+    <div class="form-grid">
+      <div class="form-group"><label>Origin</label><input type="text" id="tripOrigin" required></div>
+      <div class="form-group"><label>Destination</label><input type="text" id="tripDestination" required></div>
+      <div class="form-group"><label>Distance (km)</label><input type="number" id="tripDistance" step="0.1" required></div>
+      <div class="form-group"><label>Cargo Type</label><input type="text" id="tripCargo" required></div>
+      <div class="form-group"><label>Weight (kg)</label><input type="number" id="tripWeight" step="0.1" required></div>
+      <div class="form-group"><label>Fuel Cost (₱)</label><input type="number" id="tripFuel" step="0.01" required></div>
+      <div class="form-group"><label>Toll Fee (₱)</label><input type="number" id="tripToll" step="0.01"></div>
+      <div class="form-group"><label>Meal Allowance (₱)</label><input type="number" id="tripMeal" step="0.01" value="500"></div>
+      <div class="form-group"><label>Other Expenses (₱)</label><input type="number" id="tripOther" step="0.01"></div>
+    </div>
+    
+    <div class="form-group">
+      <label>Notes</label>
+      <textarea id="tripNotes" rows="3"></textarea>
+    </div>
+    
+    <button id="saveTripBtn" class="btn btn-primary" onclick="addTrip()">Save Trip</button>
+    <button id="cancelEditBtn" class="btn btn-secondary" style="display:none;" onclick="resetTripForm()">Cancel Edit</button>
+  </div>
+
+  <div class="chart-container" style="margin-top: 30px;">
+    <h2>Recent Trip History</h2>
+    <div id="tripsTableContainer"></div>
+  </div>
+</div>
+
+<script>
+// --- REVISED JAVASCRIPT FUNCTIONS ---
+
+function addTrip() {
+  const tripId = document.getElementById('editTripId').value;
+  const driverSelect = document.getElementById('tripDriver');
+  const customerSelect = document.getElementById('tripCustomer');
+  const vatStatus = document.getElementById('tripVatStatus').value;
+  
+  // Base Inputs
+  const tripRate = parseFloat(document.getElementById('tripRate').value) || 0;
+  const customerSubsidy = parseFloat(document.getElementById('tripSubsidy').value) || 0;
+
+  // Validation
+  if (!driverSelect.value || !customerSelect.value) {
+    showAlert('Please select a driver and a customer.', 'error');
+    return;
+  }
+
+  /**
+   * ACCOUNTING REVISION: 
+   * 1. Freight Hauling Service = tripRate
+   * 2. Total Taxable Amount = tripRate
+   * 3. VAT 12% = tripRate * 0.12 (if applicable)
+   * 4. Sub Total = Taxable Amount + VAT
+   * 5. Total = Sub Total + Subsidy
+   */
+  const freightHaulingService = tripRate;
+  const totalTaxableAmount = freightHaulingService;
+  const vatAmount = (vatStatus === 'VAT') ? (totalTaxableAmount * 0.12) : 0;
+  const subTotal = totalTaxableAmount + vatAmount;
+  const finalTotalDue = subTotal + customerSubsidy;
+
+  // Collect Truck Data
+  const selectedTrucks = [];
+  document.querySelectorAll('.trip-truck-plate').forEach(select => { 
+    if (select.value) selectedTrucks.push(select.value); 
+  });
+  
+  // Collect Helper Data
+  const selectedHelpers = [];
+  let totalHelpersPay = 0;
+  document.querySelectorAll('.trip-helper-select').forEach(select => {
+    const name = select.value;
+    const pay = parseFloat(select.parentElement.querySelector('.trip-helper-pay').value) || 0;
+    if (name) {
+      selectedHelpers.push({ name: name, pay: pay });
+      totalHelpersPay += pay;
+    }
+  });
+  
+  // Prepare Data Object for Server
+  const tripData = {
+    tripId: tripId, 
+    date: document.getElementById('tripDate').value,
+    driverId: driverSelect.value,
+    driverName: driverSelect.options[driverSelect.selectedIndex].textContent,
+    customerName: customerSelect.options[customerSelect.selectedIndex].textContent,
+    origin: document.getElementById('tripOrigin').value,
+    destination: document.getElementById('tripDestination').value,
+    distance: parseFloat(document.getElementById('tripDistance').value) || 0,
+    cargoType: document.getElementById('tripCargo').value,
+    weight: parseFloat(document.getElementById('tripWeight').value) || 0,
+    
+    // Revised Calculation Fields
+    tripRate: freightHaulingService,       // Freight Hauling Service
+    taxableAmount: totalTaxableAmount,    // Total Taxable Amount
+    vatAmount: vatAmount,                 // VAT 12%
+    subTotal: subTotal,                   // Sub Total (Rate + VAT)
+    customerSubsidy: customerSubsidy,     // Add-on Subsidy (Non-taxable)
+    grossIncome: finalTotalDue,           // Total (The final billing amount)
+    
+    vatStatus: vatStatus,
+    fuelCost: parseFloat(document.getElementById('tripFuel').value) || 0,
+    tollFee: parseFloat(document.getElementById('tripToll').value) || 0,
+    mealAllowance: parseFloat(document.getElementById('tripMeal').value) || 0,
+    otherExpenses: parseFloat(document.getElementById('tripOther').value) || 0,
+    driverPay: parseFloat(document.getElementById('tripDriverPay').value) || 0,
+    notes: document.getElementById('tripNotes').value,
+    trucksData: selectedTrucks.join(', '),
+    helpersData: JSON.stringify(selectedHelpers)
+  };
+  
+  // Calculate Expenses and Profit
+  tripData.totalExpenses = tripData.fuelCost + tripData.tollFee + tripData.mealAllowance + 
+                           tripData.otherExpenses + tripData.driverPay + totalHelpersPay;
+  
+  tripData.netProfit = tripData.grossIncome - tripData.totalExpenses;
+  
+  showLoading(true);
+  
+  // Determine if we are adding new or updating existing
+  const serverFunction = tripId ? "updateTripInServer" : "addTrip";
+  
+  google.script.run.withSuccessHandler(function(result) {
+    if(result.success) {
+      showAlert(tripId ? 'Trip Updated!' : 'Trip Added!', 'success');
+      resetTripForm();
+      loadData();
+    } else {
+      showAlert('Error: ' + result.error, 'error');
+    }
+    showLoading(false);
+  })[serverFunction](tripData);
+}
+function editTrip(tripId) {
+  const trip = globalData.trips.find(t => t['Trip ID'] === tripId);
+  if (!trip) return;
+
+  // 1. Set the Hidden ID so the app knows we are UPDATING, not ADDING
+  document.getElementById('editTripId').value = tripId;
+  
+  // 2. Update UI labels
+  document.getElementById('tripFormTitle').innerHTML = "Editing Trip: <span style='color:white'>" + tripId + "</span>";
+  const saveBtn = document.getElementById('saveTripBtn');
+  saveBtn.textContent = "UPDATE & SAVE CHANGES";
+  saveBtn.style.background = "linear-gradient(135deg, #1565c0 0%, #0d47a1 100%)";
+  document.getElementById('cancelEditBtn').style.display = "inline-block";
+
+  // 3. Fill basic fields
+  document.getElementById('tripDate').value = new Date(trip['Date']).toISOString().split('T')[0];
+  document.getElementById('tripRate').value = trip['Trip Rate'];
+  document.getElementById('tripSubsidy').value = trip['Customer Subsidy'] || 0;
+  document.getElementById('tripVatStatus').value = trip['VAT Status'] || "VAT";
+  document.getElementById('tripOrigin').value = trip['Origin'];
+  document.getElementById('tripDestination').value = trip['Destination'];
+  document.getElementById('tripDistance').value = trip['Distance'];
+  document.getElementById('tripCargo').value = trip['Cargo Type'];
+  document.getElementById('tripWeight').value = trip['Weight'];
+  document.getElementById('tripFuel').value = trip['Fuel Cost'];
+  document.getElementById('tripToll').value = trip['Toll Fee'];
+  document.getElementById('tripMeal').value = trip['Meal Allowance'];
+  document.getElementById('tripOther').value = trip['Other Trip Expenses'];
+  document.getElementById('tripDriverPay').value = trip['Driver Pay'];
+  document.getElementById('tripNotes').value = trip['Notes'];
+
+  // 4. Handle Dynamic Trucks
+  const truckContainer = document.getElementById('trucksContainer');
+  truckContainer.innerHTML = ''; // Clear current
+  if (trip['Trucks Data']) {
+    const plates = trip['Trucks Data'].split(', ');
+    plates.forEach(plate => {
+      addTruckRow(); // Use your existing function to add a row
+      const lastRow = truckContainer.lastElementChild;
+      lastRow.querySelector('select').value = plate;
+    });
+  }
+
+  // 5. Handle Dynamic Helpers
+  const helperContainer = document.getElementById('helpersContainer');
+  helperContainer.innerHTML = ''; // Clear current
+  if (trip['Helpers Data']) {
+    try {
+      const helpers = JSON.parse(trip['Helpers Data']);
+      helpers.forEach(h => {
+        addHelperRow(); // Use your existing function
+        const lastRow = helperContainer.lastElementChild;
+        lastRow.querySelector('select').value = h.name;
+        lastRow.querySelector('input').value = h.pay;
+      });
+    } catch (e) { console.log("No helpers JSON found"); }
+  }
+
+  // 6. Smooth scroll to the form
+  document.getElementById('trips').scrollIntoView({ behavior: 'smooth' });
+}
+</script>
+
+    <!-- Trucks Section -->
+    <div id="trucks" class="content-section">
+      <div class="form-container">
+        <h2 style="color: var(--primary-red); margin-bottom: 20px;">Add New Truck</h2>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Plate Number</label>
+            <input type="text" id="truckPlate" required placeholder="ABC-1234">
+          </div>
+          <div class="form-group">
+            <label>Model / Type</label>
+            <input type="text" id="truckModel" required placeholder="e.g., 6-Wheeler Forward">
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="addTruck()">Save Truck</button>
+      </div>
+      <div class="chart-container" style="margin-top: 30px;">
+        <h2>All Trucks</h2>
+        <div id="trucksTableContainer"></div>
+      </div>
+    </div>
+
+    <!-- Drivers Section -->
+    <div id="drivers" class="content-section">
+      <div class="form-container">
+        <h2 style="color: var(--primary-red); margin-bottom: 20px;">Add New Driver</h2>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Driver Name</label>
+            <input type="text" id="driverName" required>
+          </div>
+          <div class="form-group">
+            <label>License Number</label>
+            <input type="text" id="driverLicense" required>
+          </div>
+          <div class="form-group">
+            <label>Contact Number</label>
+            <input type="text" id="driverContact" required>
+          </div>
+          <div class="form-group">
+            <label>Address</label>
+            <input type="text" id="driverAddress">
+          </div>
+          <div class="form-group">
+            <label>Driver Rate per Trip (₱)</label>
+            <input type="number" id="driverRate" step="0.01" required>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="addDriver()">Save Driver</button>
+      </div>
+      <div class="chart-container" style="margin-top: 30px;">
+        <h2>All Drivers</h2>
+        <div class="search-box">
+          <input type="text" id="driverSearchInput" placeholder="Search drivers..." onkeyup="searchDrivers()" />
+          <button onclick="clearDriverSearch()">Clear</button>
+        </div>
+        <div class="search-results-count" id="driverSearchCount"></div>
+        <div id="driversTableContainer"></div>
+      </div>
+    </div>
+
+    <!-- Helpers Section -->
+    <div id="helpers" class="content-section">
+      <div class="form-container">
+        <h2 style="color: var(--primary-red); margin-bottom: 20px;">Add New Helper</h2>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Helper Name</label>
+            <input type="text" id="helperName" required>
+          </div>
+          <div class="form-group">
+            <label>Contact Number</label>
+            <input type="text" id="helperContact" required>
+          </div>
+          <div class="form-group">
+            <label>Address</label>
+            <input type="text" id="helperAddress">
+          </div>
+          <div class="form-group">
+            <label>Default Rate per Trip (₱)</label>
+            <input type="number" id="helperRate" step="0.01" required>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="addHelper()">Save Helper</button>
+      </div>
+      <div class="chart-container" style="margin-top: 30px;">
+        <h2>All Helpers</h2>
+        <div id="helpersTableContainer"></div>
+      </div>
+    </div>
+
+    <!-- Customers Section -->
+    <div id="customers" class="content-section">
+      <div class="form-container">
+        <h2 style="color: var(--primary-red); margin-bottom: 20px;">Add New Customer</h2>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Customer Name</label>
+            <input type="text" id="customerName" required>
+          </div>
+          <div class="form-group">
+            <label>Company Name</label>
+            <input type="text" id="customerCompany">
+          </div>
+          <div class="form-group">
+            <label>Contact Number</label>
+            <input type="text" id="customerContact" required>
+          </div>
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="customerEmail">
+          </div>
+          <div class="form-group">
+            <label>Address</label>
+            <input type="text" id="customerAddress">
+          </div>
+          <div class="form-group">
+            <label>Credit Limit (₱)</label>
+            <input type="number" id="customerCredit" step="0.01">
+          </div>
+          <div class="form-group">
+            <label>Payment Terms</label>
+            <select id="customerTerms">
+              <option value="COD">Cash on Delivery</option>
+              <option value="7 Days">7 Days</option>
+              <option value="15 Days">15 Days</option>
+              <option value="30 Days">30 Days</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="addCustomer()">Save Customer</button>
+      </div>
+      <div class="chart-container" style="margin-top: 30px;">
+        <h2>All Customers</h2>
+        <div class="search-box">
+          <input type="text" id="customerSearchInput" placeholder="Search customers..." onkeyup="searchCustomers()" />
+          <button onclick="clearCustomerSearch()">Clear</button>
+        </div>
+        <div class="search-results-count" id="customerSearchCount"></div>
+        <div id="customersTableContainer"></div>
+      </div>
+    </div>
+
+    <!-- Payments Section -->
+    <div id="payments" class="content-section">
+      <div class="form-container">
+        <h2 style="color: var(--primary-red); margin-bottom: 20px;">Record Payment</h2>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Customer</label>
+            <select id="paymentCustomer" required onchange="updateCustomerBalance()">
+              <option value="">Select Customer</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Payment Date</label>
+            <input type="date" id="paymentDate" required>
+          </div>
+          <div class="form-group">
+            <label>Amount (₱)</label>
+            <input type="number" id="paymentAmount" step="0.01" required>
+          </div>
+          <div class="form-group">
+            <label>Payment Method</label>
+            <select id="paymentMethod" required>
+              <option value="Cash">Cash</option>
+              <option value="Bank Transfer">Bank Transfer</option>
+              <option value="Check">Check</option>
+              <option value="GCash">GCash</option>
+              <option value="PayMaya">PayMaya</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Reference Number</label>
+            <input type="text" id="paymentReference">
+          </div>
+        </div>
+        <div id="customerBalanceInfo" style="background: #3d3d3d; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: none;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+            <span>Current Balance:</span>
+            <strong id="currentBalance" style="color: var(--warning);">₱0.00</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span>Balance After Payment:</span>
+            <strong id="balanceAfterPayment" style="color: var(--success);">₱0.00</strong>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Notes</label>
+          <textarea id="paymentNotes" rows="3"></textarea>
+        </div>
+        <button class="btn btn-primary" onclick="addPayment()">Record Payment</button>
+      </div>
+      <div class="chart-container" style="margin-top: 30px;">
+        <h2>Account Receivables</h2>
+        <div id="receivablesTableContainer"></div>
+      </div>
+      <div class="chart-container">
+        <h2>Recent Payments</h2>
+        <div id="paymentsTableContainer"></div>
+      </div>
+    </div>
+
+    <!-- Expenses Section -->
+    <div id="expenses" class="content-section">
+      <div class="form-container">
+        <h2 style="color: var(--primary-red); margin-bottom: 20px;">Add New Operating Expense</h2>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Date</label>
+            <input type="date" id="expenseDate" required>
+          </div>
+          <div class="form-group">
+            <label>Category</label>
+            <select id="expenseCategory" required>
+              <option value="">Select Category</option>
+              <option value="Salaries">Salaries (Non-Trip)</option>
+              <option value="Office">Office & Admin</option>
+              <option value="Maintenance">Maintenance</option>
+              <option value="Repairs">Repairs</option>
+              <option value="Insurance">Insurance</option>
+              <option value="Registration">Registration</option>
+              <option value="Parking">Parking</option>
+              <option value="Other">Other Overhead</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Amount (₱)</label>
+            <input type="number" id="expenseAmount" step="0.01" required>
+          </div>
+          <div class="form-group">
+            <label>Paid By</label>
+            <input type="text" id="expensePaidBy">
+          </div>
+          <div class="form-group">
+            <label>Payment Method</label>
+            <select id="expenseMethod">
+              <option value="Cash">Cash</option>
+              <option value="Bank Transfer">Bank Transfer</option>
+              <option value="Credit Card">Credit Card</option>
+              <option value="GCash">GCash</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Receipt Number</label>
+            <input type="text" id="expenseReceipt">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Description</label>
+          <textarea id="expenseDescription" rows="3" required></textarea>
+        </div>
+        <div class="form-group">
+          <label>Notes</label>
+          <textarea id="expenseNotes" rows="2"></textarea>
+        </div>
+        <button class="btn btn-primary" onclick="addExpense()">Save Operating Expense</button>
+      </div>
+      <div class="chart-container" style="margin-top: 30px;">
+        <h2>Recent Operating Expenses</h2>
+        <div id="expensesTableContainer"></div>
+      </div>
+    </div>
+
+    <!-- Calculator Section -->
+    <div id="users" class="content-section">
+      <div class="form-container">
+        <h2>Add Employee Account</h2>
+        <p class="usr-note">New accounts get a temporary password that is shown once. The employee must choose their own password the first time they sign in.</p>
+        <div class="form-grid">
+          <div class="form-group"><label for="usrFullName">Full Name</label><input type="text" id="usrFullName" maxlength="100" placeholder="e.g. Juan Dela Cruz" autocomplete="off"></div>
+          <div class="form-group"><label for="usrUsername">Username</label><input type="text" id="usrUsername" maxlength="50" placeholder="e.g. juan.delacruz" autocomplete="off"></div>
+          <div class="form-group"><label for="usrRole">Role</label>
+            <select id="usrRole"><option value="employee">Employee</option><option value="admin">Admin</option></select></div>
+        </div>
+        <button class="btn btn-primary" onclick="usrCreateUser()">Add Employee</button>
+      </div>
+      <div class="chart-container">
+        <h2>Accounts</h2>
+        <div id="usrTableContainer"><p class="usr-note">Loading accounts...</p></div>
+      </div>
+    </div>
+
+    <div id="calculator" class="content-section">
+      <div class="form-container">
+        <h2 style="color: var(--primary-red); margin-bottom: 20px;">Trip Pricing Calculator</h2>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Origin</label>
+            <input type="text" id="calcOrigin" required>
+          </div>
+          <div class="form-group">
+            <label>Destination</label>
+            <input type="text" id="calcDestination" required>
+          </div>
+          <div class="form-group">
+            <label>Distance (km)</label>
+            <input type="number" id="calcDistance" step="0.1" required>
+          </div>
+          <div class="form-group">
+            <label>Weight (kg)</label>
+            <input type="number" id="calcWeight" step="0.1" value="0">
+          </div>
+        </div>
+        <button class="btn btn-secondary" onclick="calculatePricing()">Calculate</button>
+        <div id="calculatorResult" style="display: none;" class="calculator-result">
+          <h3>Pricing Breakdown</h3>
+          <div class="result-row"><span>Base Rate:</span><span id="resultBase">₱0.00</span></div>
+          <div class="result-row"><span>Fuel Cost:</span><span id="resultFuel">₱0.00</span></div>
+          <div class="result-row"><span>Toll Fee:</span><span id="resultToll">₱0.00</span></div>
+          <div class="result-row"><span>Meal Allowance:</span><span id="resultMeal">₱0.00</span></div>
+          <div class="result-row"><span>Total Direct Expenses:</span><span id="resultExpenses">₱0.00</span></div>
+          <div class="result-row"><span>Suggested Rate:</span><span id="resultPrice">₱0.00</span></div>
+          <div class="result-row"><span>Estimated Gross Profit:</span><span id="resultProfit">₱0.00</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Payroll Section -->
+    <div id="payroll" class="content-section">
+      <div class="form-container">
+        <h2 style="color: var(--primary-red); margin-bottom: 20px;">Generate Payroll Invoice</h2>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Position</label>
+            <select id="payrollRole" onchange="updatePayrollNames()">
+              <option value="driver">Driver</option>
+              <option value="helper">Helper / Staff</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Select Name</label>
+            <select id="payrollEmployeeName" required>
+              <option value="">Select Name</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Period Start</label>
+            <input type="date" id="payrollStart" required>
+          </div>
+          <div class="form-group">
+            <label>Period End</label>
+            <input type="date" id="payrollEnd" required>
+          </div>
+        </div>
+        <button class="btn btn-secondary" onclick="generatePayroll()">Generate Invoice</button>
+        <div id="payrollResult" style="display: none; margin-top: 30px;">
+          <div class="payroll-actions">
+            <button class="btn btn-primary" onclick="printPayroll()">Print Invoice</button>
+            <button class="btn btn-secondary" onclick="downloadPayrollPDF()">Download PDF</button>
+          </div>
+          <div class="payroll-invoice-container" id="payrollInvoice"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reports Section -->
+    <div id="reports" class="content-section">
+      <div class="chart-container">
+        <h2 style="color: var(--primary-red); margin-bottom: 20px;">Comprehensive Business Reports</h2>
+        <div class="report-selector">
+          <button class="report-btn active" onclick="selectReport('profitloss')">Profit & Loss Statement</button>
+          <button class="report-btn" onclick="selectReport('income')">Income Statement</button>
+          <button class="report-btn" onclick="selectReport('trial')">Trial Balance</button>
+          <button class="report-btn" onclick="selectReport('expenses')">Expenses Report</button>
+          <button class="report-btn" onclick="selectReport('customer')">Customer Report</button>
+          <button class="report-btn" onclick="selectReport('drivers')">Drivers Report</button>
+          <button class="report-btn" onclick="selectReport('receivables')">Accounts Receivable</button>
+          <button class="report-btn" onclick="selectReport('payments')">Payments Report</button>
+        </div>
+        <div style="margin: 20px 0;">
+          <button class="btn btn-primary" onclick="printReport()">Print Report</button>
+          <button class="btn btn-secondary" onclick="downloadReportPDF()">Download PDF</button>
+          <button class="btn btn-success" onclick="downloadReportExcel()">Download Excel</button>
+          <button class="btn btn-secondary" onclick="generateAllReports()">Refresh Reports</button>
+        </div>
+        <div id="reportProfitLoss" class="report-content active"></div>
+        <div id="reportIncome" class="report-content"></div>
+        <div id="reportTrial" class="report-content"></div>
+        <div id="reportExpenses" class="report-content"></div>
+        <div id="reportCustomer" class="report-content"></div>
+        <div id="reportDrivers" class="report-content"></div>
+        <div id="reportReceivables" class="report-content"></div>
+        <div id="reportPayments" class="report-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modals -->
+  <div id="resStatusModal" class="modal">
+    <div class="modal-content" style="max-width:460px">
+      <span class="close" onclick="resCloseStatus()">&times;</span>
+      <h2 id="resStatusTitle">Update Status</h2>
+      <p class="usr-note" id="resStatusWho"></p>
+      <div class="form-group"><label for="resStatusSelect">Status</label><select id="resStatusSelect"></select></div>
+      <p class="usr-note" id="resStatusHint"></p>
+      <button class="btn btn-primary" onclick="resSaveStatus()">Save Status</button>
+      <button class="btn btn-secondary" onclick="resCloseStatus()">Cancel</button>
+    </div>
+  </div>
+
+  <div id="usrPwModal" class="modal">
+    <div class="modal-content" style="max-width:520px">
+      <h2 id="usrPwTitle">Temporary password</h2>
+      <p class="usr-note" id="usrPwWho"></p>
+      <div class="usr-temp" id="usrPwValue"></div>
+      <p class="usr-note">This password is shown only once. Give it to the employee privately. They will be asked to set their own password when they sign in.</p>
+      <button class="btn btn-secondary" onclick="usrCopyPw()">Copy</button>
+      <button class="btn btn-primary" onclick="usrClosePw()">Done</button>
+    </div>
+  </div>
+
+  <div id="usrChangePwModal" class="modal">
+    <div class="modal-content" style="max-width:480px">
+      <span class="close" onclick="usrCloseChangePw()">&times;</span>
+      <h2>Change Password</h2>
+      <div class="form-group"><label for="usrCurPw">Current password</label><input type="password" id="usrCurPw" autocomplete="current-password"></div>
+      <div class="form-group"><label for="usrNewPw">New password</label><input type="password" id="usrNewPw" autocomplete="new-password"></div>
+      <div class="form-group"><label for="usrNewPw2">Confirm new password</label><input type="password" id="usrNewPw2" autocomplete="new-password"></div>
+      <p class="usr-note">At least 12 characters, with a letter and a number, and not containing your username.</p>
+      <button class="btn btn-primary" onclick="usrSubmitChangePw()">Save Password</button>
+      <button class="btn btn-secondary" onclick="usrCloseChangePw()">Cancel</button>
+    </div>
+  </div>
+
+  <div id="statementModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeStatementModal()">&times;</span>
+      <h2 style="color: var(--primary-red); margin-bottom: 20px;">Statement of Account</h2>
+      <div id="statementContent"></div>
+    </div>
+  </div>
+
+  <div id="invoiceModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeInvoiceModal()">&times;</span>
+      <div id="invoiceContent"></div>
+    </div>
+  </div>
+
+<script>
+// Global Variables
+let globalData={};
+let charts={};
+let currentFilter='month';
+let currentCustomerBalances={};
+let currentReports={};
+let currentActiveReport='profitloss';
+
+window.onload = function() {
+  console.log('🚀 Application starting...');
+  loadData();
+  setTodayDates();
+};
+
+function setTodayDates() {
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('tripDate').value = today;
+  document.getElementById('expenseDate').value = today;
+  document.getElementById('paymentDate').value = today;
+}
+
+function applyFilter(filterType) {
+  document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+  event.target.classList.add('active');
+  const customInputs = document.getElementById('customDateInputs');
+  if (filterType === 'custom') {
+    customInputs.classList.add('active');
+    return;
+  } else {
+    customInputs.classList.remove('active');
+  }
+  currentFilter = filterType;
+  loadData(filterType);
+}
+
+function applyCustomFilter() {
+  const startDate = document.getElementById('customStartDate').value;
+  const endDate = document.getElementById('customEndDate').value;
+  if(!startDate || !endDate){
+    showAlert('Please select both start and end dates', 'error');
+    return;
+  }
+  currentFilter = 'custom';
+  loadData('custom', startDate, endDate);
+}
+
+function showSection(sectionId) {
+  document.querySelectorAll('.content-section').forEach(section => section.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
+  document.getElementById(sectionId).classList.add('active');
+  event.target.classList.add('active');
+  if (sectionId === 'reports' && Object.keys(currentReports).length === 0) {
+    generateAllReports();
+  }
+}
+
+function loadData(filterType, customStart, customEnd) {
+  showLoading(true);
+  const filter = filterType || currentFilter;
+  google.script.run.withSuccessHandler(function(data) {
+    if (data.error) {
+      showAlert('Error loading data: ' + data.error, 'error');
+      showLoading(false);
+      return;
+    }
+    globalData = data;
+    updateDashboard(data);
+    populateDropdowns(data);
+    populateTables(data);
+    showLoading(false);
+  }).withFailureHandler(function(error) {
+    showAlert('Error loading data: ' + error.message, 'error');
+    showLoading(false);
+  }).getDashboardData(filter, customStart, customEnd);
+}
+
+// ==========================================
+// DYNAMIC UI FUNCTIONS FOR TRIPS
+// ==========================================
+function addTruckRow() {
+  const container = document.getElementById('trucksContainer');
+  const rowId = 'truckRow_' + Date.now();
+  
+  let truckOptions = '<option value="">Select Truck</option>';
+  if(globalData.trucks) {
+    globalData.trucks.forEach(truck => {
+      const off = !resIsAvailable(truck['Status']);
+      truckOptions += `<option value="${truck['Plate Number']}" data-plate="${truck['Plate Number']}"${off ? ' disabled' : ''}>${truck['Plate Number']} - ${truck['Model/Type']}${off ? ' (' + truck['Status'] + ')' : ''}</option>`;
+    });
+  }
+
+  const rowHtml = `
+    <div id="${rowId}" style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center;">
+      <select class="trip-truck-plate" style="flex: 2; padding: 10px; border-radius: 6px; background: #3d3d3d; color: white;">
+        ${truckOptions}
+      </select>
+      <button type="button" class="btn btn-danger" onclick="document.getElementById('${rowId}').remove()" style="padding: 10px;">Remove</button>
+    </div>
+  `;
+  container.insertAdjacentHTML('beforeend', rowHtml);
+}
+
+function addHelperRow() {
+  const container = document.getElementById('helpersContainer');
+  const rowId = 'helperRow_' + Date.now();
+  
+  let helperOptions = '<option value="">Select Helper</option>';
+  if(globalData.helpers) {
+    globalData.helpers.forEach(helper => {
+      const off = !resIsAvailable(helper['Status']);
+      helperOptions += `<option value="${helper['Helper Name']}" data-rate="${helper['Default Rate']}"${off ? ' disabled' : ''}>${helper['Helper Name']}${off ? ' (' + helper['Status'] + ')' : ''}</option>`;
+    });
+  }
+
+  const rowHtml = `
+    <div id="${rowId}" style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center;">
+      <select class="trip-helper-select" onchange="autoFillHelperPay(this)" style="flex: 2; padding: 10px; border-radius: 6px; background: #3d3d3d; color: white;">
+        ${helperOptions}
+      </select>
+      <input type="number" class="trip-helper-pay" placeholder="Pay (₱)" step="0.01" style="flex: 1; padding: 10px; border-radius: 6px; background: #3d3d3d; color: white;">
+      <button type="button" class="btn btn-danger" onclick="document.getElementById('${rowId}').remove()" style="padding: 10px;">Remove</button>
+    </div>
+  `;
+  container.insertAdjacentHTML('beforeend', rowHtml);
+}
+
+function autoFillHelperPay(selectElement) {
+  const selectedOption = selectElement.options[selectElement.selectedIndex];
+  const payInput = selectElement.parentElement.querySelector('.trip-helper-pay');
+  payInput.value = selectedOption.dataset.rate || 0;
+}
+// ==========================================
+
+function updateDashboard(data) {
+  if (!data.analytics) return;
+  const analytics = data.analytics;
+  
+  // Apply Accounting Logic exactly to Dashboard
+  document.getElementById('totalRevenue').textContent = formatCurrency(analytics.totalRevenue);
+  document.getElementById('grossProfit').textContent = formatCurrency(analytics.grossProfit);
+  document.getElementById('operatingExpenses').textContent = formatCurrency(analytics.operatingExpenses);
+  document.getElementById('netProfit').textContent = formatCurrency(analytics.totalNetProfit);
+  document.getElementById('totalReceivables').textContent = formatCurrency(analytics.totalReceivables);
+  document.getElementById('totalPayments').textContent = formatCurrency(analytics.totalPaymentsReceived);
+  
+  document.getElementById('grossMargin').textContent = (analytics.grossMargin || 0) + '% gross margin';
+  document.getElementById('profitMargin').textContent = (analytics.profitMargin || 0) + '% net margin';
+  
+  let filterDesc = '';
+  if(data.dateRange) {
+    switch(data.dateRange.filterType) {
+      case 'today': filterDesc='Today'; break;
+      case 'yesterday': filterDesc='Yesterday'; break;
+      case 'lastWeek': filterDesc='Last 7 days'; break;
+      case 'month': filterDesc='This month'; break;
+      case 'year': filterDesc='This year'; break;
+      case 'custom': filterDesc='Custom period'; break;
+    }
+  }
+  document.getElementById('revenueChange').textContent = filterDesc;
+  
+  if (analytics.monthlyTrends) createMonthlyTrendChart(analytics.monthlyTrends);
+  if (analytics.expenseBreakdown) createExpenseChart(analytics.expenseBreakdown);
+  if (analytics.topRoutes) createRoutesChart(analytics.topRoutes);
+  if (analytics.driverPerformance) createDriverChart(analytics.driverPerformance);
+  if (analytics.topCreditors) displayCreditors(analytics.topCreditors);
+}
+
+function displayCreditors(creditors) {
+  const container = document.getElementById('creditorsList');
+  if(!creditors || creditors.length === 0){
+    container.innerHTML = '<p style="color: var(--text-gray); text-align: center; padding: 20px;">No outstanding balances</p>';
+    return;
+  }
+  let html = '';
+  creditors.forEach(creditor => {
+    html += `<div class="creditor-item" onclick="viewStatement('${creditor.customerId}')">
+               <div>
+                 <div class="creditor-name">${creditor.customerName}</div>
+                 <div class="creditor-details">Billed: ₱${parseFloat(creditor.totalBilled).toLocaleString('en-PH',{minimumFractionDigits:2})} | Paid: ₱${parseFloat(creditor.totalPaid).toLocaleString('en-PH',{minimumFractionDigits:2})}</div>
+               </div>
+               <div class="creditor-balance">₱${parseFloat(creditor.balance).toLocaleString('en-PH',{minimumFractionDigits:2})}</div>
+             </div>`;
+  });
+  container.innerHTML = html;
+}
+
+function createMonthlyTrendChart(trends) {
+  const ctx = document.getElementById('monthlyTrendChart');
+  if (charts.monthly) charts.monthly.destroy();
+  charts.monthly = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: trends.map(t => t.period),
+      datasets: [
+        { label: 'Revenue', data: trends.map(t => t.revenue), borderColor: '#2563eb', backgroundColor: 'rgba(37, 99, 235, 0.08)', borderWidth: 2.5, tension: 0.4 },
+        { label: 'Expenses', data: trends.map(t => t.expenses), borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.08)', borderWidth: 2.5, tension: 0.4 },
+        { label: 'Profit', data: trends.map(t => t.profit), borderColor: '#16a34a', backgroundColor: 'rgba(22, 163, 74, 0.08)', borderWidth: 2.5, tension: 0.4 }
+      ]
+    },
+    options: { responsive: true, plugins: { legend: { labels: { color: '#475569' } } }, scales: { y: { ticks: { color: '#475569' }, grid: { color: '#e2e8f0' } }, x: { ticks: { color: '#475569' }, grid: { color: '#e2e8f0' } } } }
+  });
+}
+
+function createExpenseChart(breakdown) {
+  const ctx = document.getElementById('expenseChart');
+  if (charts.expense) charts.expense.destroy();
+  const labels = Object.keys(breakdown);
+  const data = Object.values(breakdown);
+  if (labels.length === 0) { ctx.getContext('2d').clearRect(0,0,ctx.width,ctx.height); return; }
+  const colors = ['#14284b','#2563eb','#0d9488','#f59e0b','#7c3aed','#dc2626','#0891b2','#65a30d','#9333ea','#ea580c','#64748b'];
+  charts.expense = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: labels, datasets: [{ label: 'Expenses (₱)', data: data, backgroundColor: colors.slice(0,labels.length) }] },
+    options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } }, scales: { y: { ticks: { color: '#475569' }, grid: { color: '#e2e8f0' } }, x: { ticks: { color: '#475569' }, grid: { color: '#e2e8f0' } } } }
+  });
+}
+
+function createRoutesChart(routes) {
+  const ctx = document.getElementById('routesChart');
+  if (charts.routes) charts.routes.destroy();
+  if (!routes || routes.length === 0) { ctx.getContext('2d').clearRect(0,0,ctx.width,ctx.height); return; }
+  charts.routes = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels: routes.map(r => r.route), datasets: [{ data: routes.map(r => r.count), backgroundColor: ['#14284b','#2563eb','#f59e0b','#0d9488','#7c3aed'], borderColor: '#ffffff', borderWidth: 2 }] },
+    options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { labels: { color: '#475569' } } } }
+  });
+}
+
+function createDriverChart(drivers) {
+  const ctx = document.getElementById('driverChart');
+  if (charts.driver) charts.driver.destroy();
+  if (!drivers || drivers.length === 0) { ctx.getContext('2d').clearRect(0,0,ctx.width,ctx.height); return; }
+  charts.driver = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: drivers.map(d => d.name), datasets: [{ label: 'Revenue (₱)', data: drivers.map(d => d.revenue), backgroundColor: '#2a4f93', borderRadius: 4 }] },
+    options: { responsive: true, maintainAspectRatio: true, indexAxis: 'y', plugins: { legend: { labels: { color: '#475569' } } }, scales: { y: { ticks: { color: '#475569' }, grid: { color: '#e2e8f0' } }, x: { ticks: { color: '#475569' }, grid: { color: '#e2e8f0' } } } }
+  });
+}
+
+function populateDropdowns(data) {
+  const tripDriver = document.getElementById('tripDriver');
+  tripDriver.innerHTML = '<option value="">Select Driver</option>';
+  if (data.drivers && data.drivers.length > 0) {
+    data.drivers.forEach(driver => {
+      const option = document.createElement('option');
+      option.value = driver['Driver ID'];
+      option.textContent = driver['Driver Name'];
+      if (!resIsAvailable(driver['Status'])) { option.textContent += ' (' + driver['Status'] + ')'; option.disabled = true; }
+      option.dataset.driverRate = parseFloat(String(driver['Driver Rate']).replace(/[^0-9.-]/g, '')) || 0;
+      tripDriver.appendChild(option);
+    });
+  }
+
+  const newTripDriver = tripDriver.cloneNode(true);
+  tripDriver.parentNode.replaceChild(newTripDriver, tripDriver);
+  newTripDriver.addEventListener('change', function() {
+    const opt = this.options[this.selectedIndex];
+    if (opt && opt.value) {
+      document.getElementById('tripDriverPay').value = opt.dataset.driverRate || 0;
+    } else {
+      document.getElementById('tripDriverPay').value = '';
+    }
+  });
+
+  const customerSelects = [document.getElementById('tripCustomer'), document.getElementById('paymentCustomer')];
+  customerSelects.forEach(select => {
+    select.innerHTML = '<option value="">Select Customer</option>';
+    if (data.customers && data.customers.length > 0) {
+      data.customers.forEach(customer => {
+        const option = document.createElement('option');
+        option.value = customer['Customer ID'];
+        option.textContent = customer['Customer Name'];
+        select.appendChild(option);
+      });
+    }
+  });
+
+  if (data.analytics && data.analytics.accountReceivables) {
+    currentCustomerBalances = {};
+    data.analytics.accountReceivables.forEach(ar => {
+      currentCustomerBalances[ar.customerId] = ar.balance;
+    });
+  }
+  
+  updatePayrollNames();
+}
+
+function updatePayrollNames() {
+  const role = document.getElementById('payrollRole').value;
+  const nameSelect = document.getElementById('payrollEmployeeName');
+  nameSelect.innerHTML = '<option value="">Select Name</option>';
+  
+  if (role === 'driver' && globalData.drivers) {
+    globalData.drivers.forEach(driver => {
+      const opt = document.createElement('option');
+      opt.value = driver['Driver Name']; 
+      opt.textContent = driver['Driver Name'];
+      nameSelect.appendChild(opt);
+    });
+  } else if (role === 'helper' && globalData.helpers) {
+    globalData.helpers.forEach(helper => {
+      const opt = document.createElement('option');
+      opt.value = helper['Helper Name'];
+      opt.textContent = helper['Helper Name'];
+      nameSelect.appendChild(opt);
+    });
+  }
+}
+
+function updateCustomerBalance() {
+  const customerSelect = document.getElementById('paymentCustomer');
+  const customerId = customerSelect.value;
+  const amountInput = document.getElementById('paymentAmount');
+  if(!customerId) {
+    document.getElementById('customerBalanceInfo').style.display = 'none';
+    return;
+  }
+  const balance = currentCustomerBalances[customerId] || 0;
+  const paymentAmount = parseFloat(amountInput.value) || 0;
+  const balanceAfter = balance - paymentAmount;
+  
+  document.getElementById('currentBalance').textContent = '₱' + balance.toLocaleString('en-PH', {minimumFractionDigits: 2});
+  document.getElementById('balanceAfterPayment').textContent = '₱' + balanceAfter.toLocaleString('en-PH', {minimumFractionDigits: 2});
+  document.getElementById('customerBalanceInfo').style.display = 'block';
+  
+  amountInput.oninput = function() {
+    const newPayment = parseFloat(this.value) || 0;
+    const newBalance = balance - newPayment;
+    document.getElementById('balanceAfterPayment').textContent = '₱' + newBalance.toLocaleString('en-PH', {minimumFractionDigits: 2});
+  };
+}
+
+function populateTables(data) {
+  createTripsTableWithInvoice('tripsTableContainer', data.trips || []);
+  createStatusTable('driversTableContainer', data.drivers || [], ['Driver ID','Driver Name','License Number','Contact Number','Driver Rate','Status'], 'drivers', 'Driver ID', 'Driver Name');
+  createStatusTable('helpersTableContainer', data.helpers || [], ['Helper ID','Helper Name','Contact Number','Address','Default Rate','Status'], 'helpers', 'Helper ID', 'Helper Name');
+  createStatusTable('trucksTableContainer', data.trucks || [], ['Truck ID','Plate Number','Model/Type','Status'], 'trucks', 'Truck ID', 'Plate Number');
+  createTable('customersTableContainer', data.customers || [], ['Customer ID','Customer Name','Company Name','Contact Number','Credit Limit','Status'], true, 'Customer ID');
+  createTable('expensesTableContainer', data.expenses || [], ['Expense ID','Date','Category','Description','Amount','Paid By']);
+  if(data.payments) {
+    createTable('paymentsTableContainer', data.payments || [], ['Payment ID','Payment Date','Customer Name','Amount','Payment Method','Reference Number']);
+  }
+  if(data.analytics && data.analytics.accountReceivables) {
+    createReceivablesTable(data.analytics.accountReceivables);
+  }
+}
+
+function createTripsTableWithInvoice(containerId, trips) {
+  const container = document.getElementById(containerId);
+  if(!trips || trips.length === 0) {
+    container.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">No trips available</p>';
+    return;
+  }
+  
+  let html = '<table class="data-table"><thead><tr>';
+  html += '<th>Date</th><th>Customer</th><th>Route</th><th>Gross Income</th><th>VAT Status</th><th>Actions</th>';
+  html += '</tr></thead><tbody>';
+  
+  trips.forEach(trip => {
+    const tripDate = trip['Date'] ? new Date(trip['Date']).toLocaleDateString('en-PH') : '-';
+    
+    // Ensure we handle the math correctly for the display
+    const grossIncome = parseFloat(trip['Gross Income'] || 0);
+    const vatStatus = trip['Vat Status'] || 'NON-VAT';
+
+    html += `<tr>
+      <td>${tripDate}</td>
+      <td>${trip['Customer Name']}</td>
+      <td>${trip['Origin']} → ${trip['Destination']}</td>
+      <td style="font-weight: bold;">₱${grossIncome.toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+      <td><span class="badge ${vatStatus === 'VAT' ? 'bg-success' : 'bg-secondary'}">${vatStatus}</span></td>
+      <td>
+        <button class="invoice-btn" onclick="viewTripInvoice('${trip['Trip ID']}')" title="Invoice">Invoice</button>
+        <button class="invoice-btn" style="background:#4caf50" onclick="editTrip('${trip['Trip ID']}')" title="Edit">Edit</button>
+        <button class="invoice-btn" style="background:#f44336" onclick="deleteTrip('${trip['Trip ID']}')" title="Delete">Delete</button>
+      </td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function viewTripInvoice(tripId) {
+  showLoading(true);
+  google.script.run.withSuccessHandler(function(result) {
+    try {
+      if(result.success) {
+        displayTripInvoice(result);
+      } else {
+        showAlert('Error: ' + result.error, 'error');
+      }
+    } catch (e) {
+      showAlert('Error displaying invoice: ' + e.message, 'error');
+    }
+    showLoading(false);
+  }).withFailureHandler(function(error) {
+    showAlert('Error: ' + error.message, 'error');
+    showLoading(false);
+  }).getTripInvoice(tripId);
+}
+
+function displayTripInvoice(data) {
+  const trip = data.trip;
+  const customer = data.customer || {};
+  const settings = data.settings;
+  const companyName = settings['Company Name'] || 'Reyna Trucking Business';
+  const companyAddress = settings['Company Address'] || '';
+  const companyTIN = settings['Company TIN'] || '';
+  
+  const tripDate = trip['Date'] ? new Date(trip['Date']).toLocaleDateString('en-PH', {year:'numeric',month:'long',day:'numeric'}) : '-';
+  const invoiceDate = new Date().toLocaleDateString('en-PH', {year:'numeric',month:'long',day:'numeric'});
+  
+  // --- REVISED ACCOUNTING LOGIC ---
+  const freightService = parseFloat(trip['Trip Rate'] || 0);
+  const customerSubsidy = parseFloat(trip['Customer Subsidy'] || 0);
+  const vatStatus = trip['VAT Status'] || 'VAT';
+
+  // 1. Total Taxable Amount (The Freight)
+  const totalTaxableAmount = freightService;
+  
+  // 2. VAT (12% of Freight only)
+  const vatAmount = (vatStatus === 'VAT') ? (totalTaxableAmount * 0.12) : 0;
+  
+  // 3. Sub Total (Freight + VAT)
+  const subTotal = totalTaxableAmount + vatAmount;
+  
+  // 4. Final Total Due (Sub Total + Non-taxable Subsidy)
+  const totalDue = subTotal + customerSubsidy;
+
+  let taxBreakdownHtml = '';
+  if (vatStatus === 'VAT') {
+    taxBreakdownHtml = `
+      <div style="display: flex; justify-content: space-between; margin: 8px 0; color: #333; font-size: 13px;">
+        <span>Total Taxable Amount:</span><span>₱${totalTaxableAmount.toLocaleString('en-PH', {minimumFractionDigits: 2})}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; margin: 8px 0; color: #333; font-size: 13px;">
+        <span>VAT Amount (12%):</span><span>₱${vatAmount.toLocaleString('en-PH', {minimumFractionDigits: 2})}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; margin: 8px 0; color: #333; font-size: 13px; border-bottom: 1px solid #ccc; padding-bottom: 5px;">
+        <span>Sub-total:</span><span>₱${subTotal.toLocaleString('en-PH', {minimumFractionDigits: 2})}</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; margin: 8px 0; color: #333; font-size: 13px; font-weight: bold;">
+        <span>Add-on Subsidy:</span><span>₱${customerSubsidy.toLocaleString('en-PH', {minimumFractionDigits: 2})}</span>
+      </div>`;
+  } else {
+    taxBreakdownHtml = `
+      <div style="display: flex; justify-content: space-between; margin: 8px 0; color: #333; font-size: 13px;">
+        <span>VATable Sales:</span><span>₱0.00</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; margin: 8px 0; color: #333; font-size: 13px;">
+        <span>VAT Amount:</span><span>₱0.00</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; margin: 8px 0; color: #333; font-size: 13px;">
+        <span>Non-VAT Total:</span><span>₱${totalDue.toLocaleString('en-PH', {minimumFractionDigits: 2})}</span>
+      </div>`;
+  }
+
+  // Helper parsing
+  let helpersDisplay = '';
+  try {
+    if (trip['Helpers Data'] && trip['Helpers Data'].length > 2) { 
+      const parsedHelpers = JSON.parse(trip['Helpers Data']);
+      if (parsedHelpers.length > 0) {
+        helpersDisplay = '<br>Helpers: ' + parsedHelpers.map(h => h.name).join(', ');
+      }
+    }
+  } catch(e) { console.warn("Helper parse error"); }
+  
+  const html = `
+    <div class="invoice-actions">
+      <button class="btn btn-primary" onclick="printInvoice()">Print</button>
+      <button class="btn btn-secondary" onclick="downloadInvoicePDF()">Download PDF</button>
+    </div>
+    <div class="invoice-container" id="tripInvoiceContent">
+      <div class="invoice-header">
+        <div class="invoice-company-name">${companyName}</div>
+        <div style="color: #666; font-size: 14px; line-height: 1.6;">
+          <div>${companyAddress}</div>
+          <div>TIN: ${companyTIN} ${vatStatus === 'VAT' ? '(VAT Registered)' : '(Non-VAT)'}</div>
+        </div>
+        <div class="invoice-title">BILLING INVOICE / STATEMENT OF ACCOUNT</div>
+      </div>
+      
+      <div class="invoice-info">
+        <div class="invoice-section">
+          <h3 style="color: #1565c0; margin-bottom: 10px; font-size: 16px;">BILL TO</h3>
+          <div><strong>${customer['Company Name'] || trip['Customer Name']}</strong></div>
+          <div style="font-size: 13px; color: #555;">${customer['Address'] || '-'}</div>
+          <div style="font-size: 13px; color: #555;">Contact: ${customer['Contact Number'] || '-'}</div>
+        </div>
+        <div class="invoice-section">
+          <h3 style="color: #1565c0; margin-bottom: 10px; font-size: 16px;">INVOICE DETAILS</h3>
+          <div class="invoice-row"><strong>Invoice #:</strong><span>${trip['Trip ID']}</span></div>
+          <div class="invoice-row"><strong>Date:</strong><span>${invoiceDate}</span></div>
+          <div class="invoice-row"><strong>Terms:</strong><span>${customer['Payment Terms'] || 'COD'}</span></div>
+        </div>
+      </div>
+
+      <div style="margin: 20px 0;">
+        <table class="invoice-table">
+          <thead><tr><th>DESCRIPTION</th><th style="text-align: right;">AMOUNT</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>
+                <div style="font-weight: bold; margin-bottom: 5px;">Freight / Hauling Service</div>
+                <div style="color: #666; font-size: 12px; line-height: 1.4;">
+                  Route: ${trip['Origin']} → ${trip['Destination']}<br>
+                  Cargo: ${trip['Cargo Type']} (${trip['Weight']} kg)<br>
+                  Lead Driver: ${trip['Driver Name']}${helpersDisplay}<br>
+                  Trucks: ${trip['Trucks Data'] || '-'}
+                </div>
+              </td>
+              <td style="text-align: right; vertical-align: top; font-weight: bold;">₱${freightService.toLocaleString('en-PH', {minimumFractionDigits: 2})}</td>
+            </tr>
+            ${customerSubsidy > 0 ? `
+            <tr>
+              <td style="padding-top: 15px;">
+                <div style="font-weight: bold;">Customer Subsidy / Additional Charges</div>
+                <div style="color: #666; font-size: 12px;">Agreed miscellaneous overhead</div>
+              </td>
+              <td style="text-align: right; vertical-align: bottom; font-weight: bold;">₱${customerSubsidy.toLocaleString('en-PH', {minimumFractionDigits: 2})}</td>
+            </tr>` : ''}
+          </tbody>
+        </table>
+      </div>
+      
+      <div style="display: flex; justify-content: flex-end; margin-top: 20px;">
+        <div style="width: 320px; background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #dee2e6;">
+          ${taxBreakdownHtml}
+          <div style="border-top: 2px solid #1565c0; margin-top: 10px; padding-top: 10px; display: flex; justify-content: space-between; font-size: 18px; font-weight: bold; color: #1565c0;">
+            <span>TOTAL DUE:</span>
+            <span>₱${totalDue.toLocaleString('en-PH', {minimumFractionDigits: 2})}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="invoice-footer" style="text-align: center; margin-top: 40px; font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 20px;">
+        <p><strong>THIS DOCUMENT IS FOR BILLING PURPOSES ONLY</strong></p>
+        <p>Please make all checks payable to <strong>${companyName}</strong></p>
+      </div>
+    </div>`;
+  
+  document.getElementById('invoiceContent').innerHTML = html;
+  document.getElementById('invoiceModal').style.display = 'block';
+}
+
+function printInvoice() {
+  const printWindow = window.open('','','width=800,height=600');
+  printWindow.document.write(document.getElementById('tripInvoiceContent').innerHTML);
+  printWindow.document.close();
+  printWindow.print();
+}
+
+function downloadInvoicePDF() {
+  const element = document.getElementById('tripInvoiceContent');
+  showLoading(true);
+  html2canvas(element).then(canvas => {
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jspdf.jsPDF();
+    const imgWidth = 190;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
+    pdf.save('trip-invoice.pdf');
+    showLoading(false);
+    showAlert('Invoice PDF downloaded successfully!', 'success');
+  }).catch(error => {
+    showLoading(false);
+    showAlert('Error generating PDF: ' + error.message, 'error');
+  });
+}
+
+function closeInvoiceModal() { document.getElementById('invoiceModal').style.display = 'none'; }
+
+function createReceivablesTable(receivables) {
+  const container = document.getElementById('receivablesTableContainer');
+  if(receivables.length === 0) {
+    container.innerHTML = '<p style="color: #999;">No receivables data available</p>';
+    return;
+  }
+  let html = '<table class="data-table"><thead><tr>';
+  html += '<th>Customer</th><th>Total Billed</th><th>Total Paid</th><th>Outstanding Balance</th><th>Payment Terms</th><th>Action</th>';
+  html += '</tr></thead><tbody>';
+  receivables.forEach(ar => {
+    html += '<tr>';
+    html += `<td>${ar.customerName}</td>`;
+    html += `<td>₱${parseFloat(ar.totalBilled).toLocaleString('en-PH',{minimumFractionDigits:2})}</td>`;
+    html += `<td>₱${parseFloat(ar.totalPaid).toLocaleString('en-PH',{minimumFractionDigits:2})}</td>`;
+    html += `<td style="color: ${ar.balance>0?'var(--warning)':'var(--success)'}; font-weight: bold;">₱${parseFloat(ar.balance).toLocaleString('en-PH',{minimumFractionDigits:2})}</td>`;
+    html += `<td>${ar.paymentTerms}</td>`;
+    html += `<td><button class="btn btn-secondary" style="padding: 8px 16px; font-size: 12px;" onclick="viewStatement('${ar.customerId}')">View Statement</button></td>`;
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function createTable(containerId, data, columns, clickable=false, clickColumn=null) {
+  const container = document.getElementById(containerId);
+  if(!data || data.length === 0) {
+    container.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">No data available</p>';
+    return;
+  }
+  let html = '<table class="data-table"><thead><tr>';
+  columns.forEach(col => { html += `<th>${col}</th>`; });
+  html += '</tr></thead><tbody>';
+  data.forEach(row => {
+    const rowClass = clickable ? 'clickable-row' : '';
+    const rowClick = clickable && clickColumn ? `onclick="viewStatement('${row[clickColumn]}')"` : ' ';
+    html += `<tr class="${rowClass}" ${rowClick}>`;
+    columns.forEach(col => {
+      let value = row[col];
+      if(col.includes('Date') && value) {
+        try { const date = new Date(value); if(!isNaN(date.getTime())) value = date.toLocaleDateString('en-PH'); } catch(e){}
+      }
+      if(col.includes('Amount') || col.includes('Income') || col.includes('Profit') || col.includes('Balance') || col.includes('Limit') || col.includes('Rate')) {
+        value = '₱' + parseFloat(value||0).toLocaleString('en-PH', {minimumFractionDigits: 2});
+      }
+      html += `<td>${value || '-'}</td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function searchDrivers() {
+  const searchTerm = document.getElementById('driverSearchInput').value.toLowerCase();
+  const table = document.querySelector('#driversTableContainer .data-table tbody');
+  if(!table) return;
+  const rows = table.getElementsByTagName('tr');
+  let visibleCount = 0;
+  for(let row of rows) {
+    if(row.textContent.toLowerCase().includes(searchTerm)) {
+      row.style.display = '';
+      row.classList.add('highlight');
+      visibleCount++;
+    } else {
+      row.style.display = 'none';
+      row.classList.remove('highlight');
+    }
+  }
+  document.getElementById('driverSearchCount').textContent = searchTerm ? `Showing ${visibleCount} of ${rows.length} drivers` : '';
+}
+function clearDriverSearch() { document.getElementById('driverSearchInput').value = ''; searchDrivers(); }
+
+function searchCustomers() {
+  const searchTerm = document.getElementById('customerSearchInput').value.toLowerCase();
+  const table = document.querySelector('#customersTableContainer .data-table tbody');
+  if(!table) return;
+  const rows = table.getElementsByTagName('tr');
+  let visibleCount = 0;
+  for(let row of rows) {
+    if(row.textContent.toLowerCase().includes(searchTerm)) {
+      row.style.display = '';
+      row.classList.add('highlight');
+      visibleCount++;
+    } else {
+      row.style.display = 'none';
+      row.classList.remove('highlight');
+    }
+  }
+  document.getElementById('customerSearchCount').textContent = searchTerm ? `Showing ${visibleCount} of ${rows.length} customers` : '';
+}
+function clearCustomerSearch() { document.getElementById('customerSearchInput').value = ''; searchCustomers(); }
+
+function viewStatement(customerId) {
+  showLoading(true);
+  google.script.run.withSuccessHandler(function(result) {
+    showLoading(false);
+    if (result && result.success) displayStatement(result);
+    else showAlert('Error: ' + ((result && result.error) || 'Could not load the statement.'), 'error');
+  }).withFailureHandler(function(error) {
+    showLoading(false);
+    showAlert('Error: ' + ((error && error.message) || error), 'error');
+  }).getCustomerStatement(customerId);
+}
+
+function displayStatement(data) {
+  const customer = data.customer;
+  const transactions = data.transactions;
+  const currentBalance = data.currentBalance;
+  
+  let html = `
+    <div style="margin-bottom: 20px;">
+      <h3>${customer['Customer Name']}</h3>
+      <p style="color: var(--text-gray);">${customer['Company Name'] || ''}</p>
+      <p style="color: var(--text-gray);">Contact: ${customer['Contact Number']}</p>
+      <p style="margin-top: 10px;"><strong>Current Balance: <span style="color: ${currentBalance>0?'var(--warning)':'var(--success)'}; font-size: 20px;">₱${parseFloat(currentBalance).toLocaleString('en-PH',{minimumFractionDigits:2})}</span></strong></p>
+    </div>
+    <table class="data-table">
+      <thead><tr><th>Date</th><th>Type</th><th>Reference</th><th>Description</th><th>Debit</th><th>Credit</th><th>Balance</th></tr></thead>
+      <tbody>`;
+      
+  transactions.forEach(trans => {
+    html += `<tr>
+      <td>${new Date(trans.date).toLocaleDateString('en-PH')}</td>
+      <td>${trans.type}</td>
+      <td>${trans.reference}</td>
+      <td>${trans.description}</td>
+      <td style="color: var(--warning);">${trans.debit>0 ? '₱'+trans.debit.toLocaleString('en-PH',{minimumFractionDigits:2}) : '-'}</td>
+      <td style="color: var(--success);">${trans.credit>0 ? '₱'+trans.credit.toLocaleString('en-PH',{minimumFractionDigits:2}) : '-'}</td>
+      <td style="font-weight: bold;">₱${trans.balance.toLocaleString('en-PH',{minimumFractionDigits:2})}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  
+  document.getElementById('statementContent').innerHTML = html;
+  document.getElementById('statementModal').style.display = 'block';
+}
+function closeStatementModal() { document.getElementById('statementModal').style.display = 'none'; }
+
+function addPayment() {
+  const customerSelect = document.getElementById('paymentCustomer');
+  const selectedCustomer = customerSelect.options[customerSelect.selectedIndex];
+  const paymentData = {
+    customerId: customerSelect.value,
+    customerName: selectedCustomer.textContent,
+    paymentDate: document.getElementById('paymentDate').value,
+    amount: parseFloat(document.getElementById('paymentAmount').value),
+    paymentMethod: document.getElementById('paymentMethod').value,
+    referenceNumber: document.getElementById('paymentReference').value,
+    notes: document.getElementById('paymentNotes').value
+  };
+  
+  if(!paymentData.customerId || !paymentData.amount) {
+    showAlert('Please fill in all required fields', 'error'); return;
+  }
+  
+  showLoading(true);
+  google.script.run.withSuccessHandler(function(result) {
+    if(result.success) {
+      showAlert('Payment recorded successfully!', 'success');
+      loadData();
+      document.getElementById('paymentDate').value = new Date().toISOString().split('T')[0];
+      document.querySelectorAll('#payments input:not([type="date"]), #payments textarea, #payments select').forEach(input => input.value = '');
+      document.getElementById('customerBalanceInfo').style.display = 'none';
+    } else {
+      showAlert('Error: ' + result.error, 'error');
+    }
+    showLoading(false);
+  }).withFailureHandler(function(error) {
+    showAlert('Error: ' + error.message, 'error');
+    showLoading(false);
+  }).addPayment(paymentData);
+}
+
+function addTruck() {
+  const truckData = {
+    plate: document.getElementById('truckPlate').value,
+    model: document.getElementById('truckModel').value
+  };
+  if(!truckData.plate) { showAlert('Please fill in plate number', 'error'); return; }
+  
+  showLoading(true);
+  google.script.run.withSuccessHandler(function(result) {
+    if(result.success) {
+      showAlert('Truck saved!', 'success');
+      loadData();
+      document.getElementById('truckPlate').value = '';
+      document.getElementById('truckModel').value = '';
+    } else showAlert('Error: ' + result.error, 'error');
+    showLoading(false);
+  }).withFailureHandler(function(error) {
+    showAlert('Error: ' + error.message, 'error'); showLoading(false);
+  }).addTruck(truckData);
+}
+
+function addHelper() {
+  const helperData = {
+    name: document.getElementById('helperName').value,
+    contact: document.getElementById('helperContact').value,
+    address: document.getElementById('helperAddress').value,
+    rate: parseFloat(document.getElementById('helperRate').value || 0)
+  };
+  if(!helperData.name) { showAlert('Please fill in helper name', 'error'); return; }
+  
+  showLoading(true);
+  google.script.run.withSuccessHandler(function(result) {
+    if(result.success) {
+      showAlert('Helper saved!', 'success');
+      loadData();
+      document.querySelectorAll('#helpers input').forEach(input => input.value = '');
+    } else showAlert('Error: ' + result.error, 'error');
+    showLoading(false);
+  }).withFailureHandler(function(error) {
+    showAlert('Error: ' + error.message, 'error'); showLoading(false);
+  }).addHelper(helperData);
+}
+
+// MODIFIED: addTrip with VAT Calculation
+function addTrip() {
+  const driverSelect = document.getElementById('tripDriver');
+  const customerSelect = document.getElementById('tripCustomer');
+  const vatStatus = document.getElementById('tripVatStatus').value;
+  let tripRate = parseFloat(document.getElementById('tripRate').value) || 0;
+
+  if (!driverSelect.value || !customerSelect.value) {
+    showAlert('Please select a driver and a customer.', 'error');
+    return;
+  }
+
+  // --- NEW VAT LOGIC ---
+  // If VAT is chosen, the Gross Billed becomes Rate + 12%
+  let finalGrossBilled = tripRate;
+  if (vatStatus === 'VAT') {
+    finalGrossBilled = tripRate * 1.12; 
+  }
+  // ---------------------
+
+  const selectedTrucks = [];
+  document.querySelectorAll('.trip-truck-plate').forEach(select => {
+    if (select.value) selectedTrucks.push(select.value);
+  });
+  
+  const selectedHelpers = [];
+  document.querySelectorAll('.trip-helper-select').forEach(select => {
+    const name = select.value;
+    const payInput = select.parentElement.querySelector('.trip-helper-pay');
+    const pay = parseFloat(payInput.value) || 0;
+    if (name) selectedHelpers.push({ name: name, pay: pay });
+  });
+  
+  const tripData = {
+    date: document.getElementById('tripDate').value,
+    driverId: driverSelect.value,
+    driverName: driverSelect.options[driverSelect.selectedIndex].textContent,
+    customerName: customerSelect.options[customerSelect.selectedIndex].textContent,
+    origin: document.getElementById('tripOrigin').value,
+    destination: document.getElementById('tripDestination').value,
+    distance: parseFloat(document.getElementById('tripDistance').value),
+    cargoType: document.getElementById('tripCargo').value,
+    weight: parseFloat(document.getElementById('tripWeight').value),
+    tripRate: tripRate,
+    customerSubsidy: parseFloat(document.getElementById('tripSubsidy').value) || 0,
+    vatStatus: vatStatus,
+    fuelCost: parseFloat(document.getElementById('tripFuel').value || 0),
+    tollFee: parseFloat(document.getElementById('tripToll').value || 0),
+    mealAllowance: parseFloat(document.getElementById('tripMeal').value || 0),
+    otherExpenses: parseFloat(document.getElementById('tripOther').value || 0),
+    driverPay: parseFloat(document.getElementById('tripDriverPay').value || 0),
+    notes: document.getElementById('tripNotes').value,
+    trucksData: selectedTrucks.join(', '),
+    helpersData: JSON.stringify(selectedHelpers)
+  };
+  
+  let totalHelpersPay = 0;
+  selectedHelpers.forEach(h => totalHelpersPay += h.pay);
+  
+  tripData.totalExpenses = tripData.fuelCost + tripData.tollFee + tripData.mealAllowance + tripData.otherExpenses + tripData.driverPay + totalHelpersPay;
+  // Apply the VAT-adjusted rate to Gross Income
+  tripData.grossIncome = finalGrossBilled + tripData.customerSubsidy;
+  tripData.netProfit = tripData.grossIncome - tripData.totalExpenses;
+  
+  showLoading(true);
+  google.script.run.withSuccessHandler(function(result) {
+    if(result.success) {
+      showAlert('Trip saved successfully!', 'success');
+      loadData();
+      // Reset form logic here...
+    } else {
+      showAlert('Error: ' + result.error, 'error');
+    }
+    showLoading(false);
+  }).addTrip(tripData);
+}
+
+// MODIFIED: Table with Edit and Delete Buttons
+function createTripsTableWithInvoice(containerId, trips) {
+  const container = document.getElementById(containerId);
+  if(!trips || trips.length === 0) {
+    container.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">No trips available</p>';
+    return;
+  }
+  let html = '<table class="data-table"><thead><tr>';
+  html += '<th>Date</th><th>Customer</th><th>Origin/Dest</th><th>Gross (VAT Inc.)</th><th>Actions</th>';
+  html += '</tr></thead><tbody>';
+  
+  trips.forEach(trip => {
+    const tripDate = trip['Date'] ? new Date(trip['Date']).toLocaleDateString('en-PH') : '-';
+    const income = '₱' + parseFloat(trip['Gross Income'] || 0).toLocaleString('en-PH', {minimumFractionDigits:2});
+    
+    html += `<tr>
+      <td>${tripDate}</td>
+      <td>${trip['Customer Name']}</td>
+      <td>${trip['Origin']} to ${trip['Destination']}</td>
+      <td style="font-weight:bold">${income}</td>
+      <td>
+        <button class="invoice-btn" onclick="viewTripInvoice('${trip['Trip ID']}')">Invoice</button>
+        <button class="btn-success" style="padding:5px 10px; border-radius:4px; border:none; cursor:pointer;" onclick="editTrip('${trip['Trip ID']}')">Edit</button>
+        <button class="btn-danger" style="padding:5px 10px; border-radius:4px; border:none; cursor:pointer;" onclick="deleteTrip('${trip['Trip ID']}')">Delete</button>
+      </td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+// NEW: Delete Function
+function deleteTrip(tripId) {
+  if(confirm("Are you sure you want to delete Trip " + tripId + "? This cannot be undone.")) {
+    showLoading(true);
+    google.script.run.withSuccessHandler(function(res) {
+      showAlert("Trip deleted.", "success");
+      loadData();
+    }).deleteTripFromServer(tripId);
+  }
+}
+
+// NEW: Edit Function (Basic implementation: scrolls to form and fills data)
+function editTrip(tripId) {
+  const trip = globalData.trips.find(t => t['Trip ID'] === tripId);
+  if(!trip) return;
+  
+  // Fill the form with existing data
+  document.getElementById('tripDate').value = new Date(trip['Date']).toISOString().split('T')[0];
+  document.getElementById('tripRate').value = trip['Trip Rate'];
+  document.getElementById('tripOrigin').value = trip['Origin'];
+  document.getElementById('tripDestination').value = trip['Destination'];
+  // ... fill other fields similarly ...
+
+  document.getElementById('trips').scrollIntoView({behavior: 'smooth'});
+  showAlert("Form filled with Trip " + tripId + " data. Modify and save to create a new entry (or update if you modify your Backend to support Update).", "success");
+}
+function addDriver() {
+  const driverData = {
+    driverName: document.getElementById('driverName').value,
+    licenseNumber: document.getElementById('driverLicense').value,
+    contactNumber: document.getElementById('driverContact').value,
+    address: document.getElementById('driverAddress').value,
+    driverRate: parseFloat(document.getElementById('driverRate').value)
+  };
+  
+  if(!driverData.driverName || !driverData.licenseNumber || !driverData.driverRate) {
+    showAlert('Please fill in all required fields', 'error'); return;
+  }
+  
+  showLoading(true);
+  google.script.run.withSuccessHandler(function(result) {
+    if(result.success) {
+      showAlert('Driver added successfully! Driver ID: ' + result.driverId, 'success');
+      loadData();
+      document.querySelectorAll('#drivers input').forEach(input => input.value = '');
+    } else {
+      showAlert('Error: ' + result.error, 'error');
+    }
+    showLoading(false);
+  }).withFailureHandler(function(error) {
+    showAlert('Error: ' + error.message, 'error');
+    showLoading(false);
+  }).addDriver(driverData);
+}
+
+function addCustomer() {
+  const customerData = {
+    customerName: document.getElementById('customerName').value,
+    companyName: document.getElementById('customerCompany').value,
+    contactNumber: document.getElementById('customerContact').value,
+    email: document.getElementById('customerEmail').value,
+    address: document.getElementById('customerAddress').value,
+    creditLimit: parseFloat(document.getElementById('customerCredit').value || 0),
+    paymentTerms: document.getElementById('customerTerms').value
+  };
+  
+  if(!customerData.customerName || !customerData.contactNumber) {
+    showAlert('Please fill in all required fields', 'error'); return;
+  }
+  
+  showLoading(true);
+  google.script.run.withSuccessHandler(function(result) {
+    if(result.success) {
+      showAlert('Customer added successfully! Customer ID: ' + result.customerId, 'success');
+      loadData();
+      document.querySelectorAll('#customers input, #customers select').forEach(input => {
+        if(input.id !== 'customerTerms') input.value = '';
+      });
+    } else {
+      showAlert('Error: ' + result.error, 'error');
+    }
+    showLoading(false);
+  }).withFailureHandler(function(error) {
+    showAlert('Error: ' + error.message, 'error');
+    showLoading(false);
+  }).addCustomer(customerData);
+}
+
+function addExpense() {
+  const expenseData = {
+    date: document.getElementById('expenseDate').value,
+    category: document.getElementById('expenseCategory').value,
+    description: document.getElementById('expenseDescription').value,
+    amount: parseFloat(document.getElementById('expenseAmount').value),
+    paidBy: document.getElementById('expensePaidBy').value,
+    paymentMethod: document.getElementById('expenseMethod').value,
+    receiptNumber: document.getElementById('expenseReceipt').value,
+    notes: document.getElementById('expenseNotes').value
+  };
+  
+  if(!expenseData.category || !expenseData.description || !expenseData.amount) {
+    showAlert('Please fill in all required fields', 'error'); return;
+  }
+  
+  showLoading(true);
+  google.script.run.withSuccessHandler(function(result) {
+    if(result.success) {
+      showAlert('Operating Expense added successfully!', 'success');
+      loadData();
+      document.getElementById('expenseDate').value = new Date().toISOString().split('T')[0];
+      document.querySelectorAll('#expenses input:not([type="date"]), #expenses textarea, #expenses select').forEach(input => {
+        if(input.id !== 'expenseMethod') input.value = '';
+      });
+    } else {
+      showAlert('Error: ' + result.error, 'error');
+    }
+    showLoading(false);
+  }).withFailureHandler(function(error) {
+    showAlert('Error: ' + error.message, 'error');
+    showLoading(false);
+  }).addExpense(expenseData);
+}
+
+function calculatePricing() {
+  const origin = document.getElementById('calcOrigin').value;
+  const destination = document.getElementById('calcDestination').value;
+  const distance = parseFloat(document.getElementById('calcDistance').value);
+  const weight = parseFloat(document.getElementById('calcWeight').value);
+  
+  if(!origin || !destination || !distance) {
+    showAlert('Please fill in all required fields', 'error'); return;
+  }
+  
+  showLoading(true);
+  google.script.run.withSuccessHandler(function(result) {
+    document.getElementById('resultBase').textContent = '₱' + result.baseRate;
+    document.getElementById('resultFuel').textContent = '₱' + result.fuelCost;
+    document.getElementById('resultToll').textContent = '₱' + result.tollFee;
+    document.getElementById('resultMeal').textContent = '₱' + result.mealAllowance;
+    document.getElementById('resultExpenses').textContent = '₱' + result.estimatedExpenses;
+    document.getElementById('resultPrice').textContent = '₱' + result.suggestedPrice;
+    document.getElementById('resultProfit').textContent = '₱' + result.estimatedProfit;
+    document.getElementById('calculatorResult').style.display = 'block';
+    showLoading(false);
+  }).withFailureHandler(function(error) {
+    showAlert('Error: ' + error.message, 'error');
+    showLoading(false);
+  }).calculateTripPricing(origin, destination, distance, weight);
+}
+
+function generatePayroll() {
+  const role = document.getElementById('payrollRole').value;
+  const employeeName = document.getElementById('payrollEmployeeName').value;
+  const periodStart = document.getElementById('payrollStart').value;
+  const periodEnd = document.getElementById('payrollEnd').value;
+  
+  if(!employeeName || !periodStart || !periodEnd) {
+    showAlert('Please fill all fields', 'error'); return;
+  }
+  
+  showLoading(true);
+  google.script.run.withSuccessHandler(function(result) {
+    if(result.success) {
+      document.getElementById('payrollInvoice').innerHTML = result.html;
+      document.getElementById('payrollResult').style.display = 'block';
+      showAlert('Payroll invoice generated!', 'success');
+    } else {
+      showAlert('Error: ' + result.error, 'error');
+    }
+    showLoading(false);
+  }).withFailureHandler(function(error) {
+    showAlert('Error: ' + error.message, 'error');
+    showLoading(false);
+  }).generatePayrollInvoice(employeeName, role, periodStart, periodEnd);
+}
+
+function printPayroll() {
+  const printWindow = window.open('','','width=800,height=600');
+  printWindow.document.write(document.getElementById('payrollInvoice').innerHTML);
+  printWindow.document.close();
+  printWindow.print();
+}
+
+function downloadPayrollPDF() {
+  const element = document.getElementById('payrollInvoice');
+  showLoading(true);
+  html2canvas(element).then(canvas => {
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jspdf.jsPDF();
+    const imgWidth = 190;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
+    pdf.save('payroll-invoice.pdf');
+    showLoading(false);
+    showAlert('Payroll PDF downloaded successfully!', 'success');
+  }).catch(error => {
+    showLoading(false);
+    showAlert('Error generating PDF: ' + error.message, 'error');
+  });
+}
+
+function generateAllReports() {
+  showLoading(true);
+  google.script.run.withSuccessHandler(function(result) {
+    if(result.success) {
+      currentReports = result.reports;
+      displayAllReports();
+      showAlert('Reports generated successfully!', 'success');
+    } else {
+      showAlert('Error generating reports: ' + result.error, 'error');
+    }
+    showLoading(false);
+  }).withFailureHandler(function(error) {
+    showAlert('Error: ' + error.message, 'error');
+    showLoading(false);
+  }).generateReports(currentFilter, document.getElementById('customStartDate').value, document.getElementById('customEndDate').value);
+}
+
+function selectReport(reportType) {
+  document.querySelectorAll('.report-btn').forEach(btn => btn.classList.remove('active'));
+  event.target.classList.add('active');
+  document.querySelectorAll('.report-content').forEach(content => content.classList.remove('active'));
+  document.getElementById('report' + reportType.charAt(0).toUpperCase() + reportType.slice(1).replace('profitloss','ProfitLoss')).classList.add('active');
+  currentActiveReport = reportType;
+}
+
+function displayAllReports() {
+  if (currentReports.profitAndLoss) displayProfitAndLoss(currentReports.profitAndLoss);
+  if (currentReports.incomeStatement) displayIncomeStatement(currentReports.incomeStatement);
+  if (currentReports.trialBalance) displayTrialBalance(currentReports.trialBalance);
+  if (currentReports.expensesReport) displayExpensesReport(currentReports.expensesReport);
+  if (currentReports.customerReport) displayCustomerReport(currentReports.customerReport);
+  if (currentReports.driversReport) displayDriversReport(currentReports.driversReport);
+  if (currentReports.accountsReceivable) displayAccountsReceivableReport(currentReports.accountsReceivable);
+  if (currentReports.paymentsReport) displayPaymentsReport(currentReports.paymentsReport);
+}
+
+function formatCurrency(amount) { return '₱' + parseFloat(amount||0).toLocaleString('en-PH', {minimumFractionDigits: 2}); }
+function formatDate(dateValue) { if (!dateValue) return '-'; try { const date = new Date(dateValue); return date.toLocaleDateString('en-PH'); } catch(e) { return dateValue; } }
+
+function displayProfitAndLoss(report) {
+  let html = `<div class="pl-report-container"><div class="pl-header"><h2 style="font-size: 28px; color: #1565c0; margin-bottom: 10px;">${report.companyName}</h2><h3 style="font-size: 22px; color: #1565c0; font-weight: bold;">${report.reportTitle}</h3><p style="color: #666; margin-top: 10px;">For the Period ${report.periodStart} to ${report.periodEnd}</p></div>`;
+  report.sections.forEach(section => {
+    html += `<div class="pl-section"><div class="pl-section-title">${section.title}</div>`;
+    section.items.forEach(item => {
+      if (item.isNote) { html += `<div class="pl-item" style="font-style: italic; color: #666; padding-left: 20px;">${item.label}</div>`;
+      } else if (item.amount !== null && item.amount !== undefined) {
+        const isNegative = item.isNegative ? '-' : '';
+        html += `<div class="pl-item"><span>${item.label}</span><span style="font-weight: 600;">${isNegative}${formatCurrency(item.amount)}</span></div>`;
+      }
+    });
+    if (section.total) {
+      const totalClass = section.total.isGrandTotal ? 'pl-grand-total' : section.total.isBold ? 'pl-total' : '';
+      html += `<div class="pl-item ${totalClass}"><span>${section.total.label}</span><span>${formatCurrency(section.total.amount)}</span></div>`;
+      if (section.total.percentage) html += `<div class="pl-item" style="font-style: italic; color: #666; justify-content: flex-end;"><span>${section.total.percentage}</span></div>`;
+    }
+    html += `</div>`;
+  });
+  if (report.summary) {
+    html += `<div class="pl-section" style="margin-top: 40px; background: #e3f2fd; padding: 20px; border-radius: 8px;"><div class="pl-section-title" style="color: #0d47a1;">KEY FINANCIAL METRICS</div><div class="pl-item"><span>Gross Profit Margin:</span><span style="font-weight: 600;">${report.summary.grossProfitMargin}%</span></div><div class="pl-item"><span>Net Profit Margin:</span><span style="font-weight: 600;">${report.summary.netProfitMargin}%</span></div></div>`;
+  }
+  html += `<div style="margin-top: 50px; text-align: center; font-size: 12px; color: #666; padding-top: 20px; border-top: 1px solid #e0e0e0;"><p><strong>This is an accounting standard financial statement.</strong></p><p style="margin-top: 10px; font-style: italic;">Generated on ${new Date().toLocaleString('en-PH')}</p></div></div>`;
+  document.getElementById('reportProfitLoss').innerHTML = html;
+}
+
+function displayIncomeStatement(report) {
+  let html = `<div style="background: white; color: #1565c0; padding: 40px; border-radius: 10px;"><div style="text-align: center; border-bottom: 3px solid #1565c0; padding-bottom: 20px; margin-bottom: 30px;"><h2 style="font-size: 28px; color: #1565c0; margin-bottom: 10px;">${report.companyName}</h2><h3 style="font-size: 22px; color: #1565c0; font-weight: bold;">${report.reportTitle}</h3><p style="color: #1565c0; margin-top: 10px;">Period: ${currentReports.dateRange?formatDate(currentReports.dateRange.startDate)+' - '+formatDate(currentReports.dateRange.endDate):''}</p></div>`;
+  report.sections.forEach(section => {
+    html += `<div style="margin: 30px 0;"><h4 style="color: #0d47a1; font-size: 18px; font-weight: bold; margin-bottom: 15px; border-bottom: 2px solid #1565c0; padding-bottom: 8px;">${section.title}</h4>`;
+    section.items.forEach(item => {
+      const indent = item.isSubItem ? 'margin-left: 30px;' : '';
+      html += `<div style="display: flex; justify-content: space-between; padding: 8px 0; color: #1565c0; ${indent}"><span>${item.label}</span><span style="font-weight: 600;">${formatCurrency(item.amount||item.value)}</span></div>`;
+    });
+    if (section.total) {
+      const totalStyle = section.total.isGrandTotal ? 'font-size: 20px; font-weight: bold; border-top: 3px double #1565c0; margin-top: 15px; padding-top: 15px;' : 'font-weight: bold; border-top: 2px solid #1565c0; margin-top: 10px; padding-top: 10px;';
+      html += `<div style="display: flex; justify-content: space-between; padding: 8px 0; color: #0d47a1; ${totalStyle}"><span>${section.total.label}</span><span>${formatCurrency(section.total.amount)}</span></div>`;
+    }
+    html += '</div>';
+  });
+  html += '</div>';
+  document.getElementById('reportIncome').innerHTML = html;
+}
+
+function displayTrialBalance(report) {
+  let html = `<div style="background: white; color: #1565c0; padding: 40px; border-radius: 10px;"><div style="text-align: center; border-bottom: 3px solid #1565c0; padding-bottom: 20px; margin-bottom: 30px;"><h2 style="font-size: 28px; color: #1565c0; margin-bottom: 10px;">${report.companyName}</h2><h3 style="font-size: 22px; color: #1565c0; font-weight: bold;">${report.reportTitle}</h3><p style="color: #1565c0; margin-top: 10px;">As of ${new Date().toLocaleDateString('en-PH')}</p></div><table style="width: 100%; border-collapse: collapse; color: #1565c0;"><thead><tr style="background: #1565c0; color: white;"><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Account</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Debit</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Credit</th></tr></thead><tbody>`;
+  report.accounts.forEach(account => {
+    if (account.isHeader) {
+      html += `<tr style="background: #e3f2fd;"><td colspan="3" style="padding: 10px; font-weight: bold; border: 1px solid #1565c0;">${account.account}</td></tr>`;
+    } else {
+      html += `<tr><td style="padding: 8px 12px; padding-left: 30px; border: 1px solid #e0e0e0;">${account.account}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0;">${account.debit>0?formatCurrency(account.debit):'-'}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0;">${account.credit>0?formatCurrency(account.credit):'-'}</td></tr>`;
+    }
+  });
+  html += `<tr style="background: #e3f2fd; font-weight: bold; border-top: 3px solid #1565c0;"><td style="padding: 12px; border: 1px solid #1565c0;">TOTAL</td><td style="padding: 12px; text-align: right; border: 1px solid #1565c0;">${formatCurrency(report.totalDebit)}</td><td style="padding: 12px; text-align: right; border: 1px solid #1565c0;">${formatCurrency(report.totalCredit)}</td></tr></tbody></table></div>`;
+  document.getElementById('reportTrial').innerHTML = html;
+}
+
+function displayExpensesReport(report) {
+  let html = `<div style="background: white; color: #1565c0; padding: 40px; border-radius: 10px;"><div style="text-align: center; border-bottom: 3px solid #1565c0; padding-bottom: 20px; margin-bottom: 30px;"><h2 style="font-size: 28px; color: #1565c0; margin-bottom: 10px;">${report.companyName}</h2><h3 style="font-size: 22px; color: #1565c0; font-weight: bold;">${report.reportTitle}</h3><p style="color: #1565c0; margin-top: 10px;">Period: ${currentReports.dateRange?formatDate(currentReports.dateRange.startDate)+' - '+formatDate(currentReports.dateRange.endDate):''}</p></div><table style="width: 100%; border-collapse: collapse; color: #1565c0; margin-bottom: 30px;"><thead><tr style="background: #1565c0; color: white;"><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Date</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Expense ID</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Category</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Description</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Amount</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Paid By</th></tr></thead><tbody>`;
+  report.expenses.forEach(exp => {
+    html += `<tr><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${formatDate(exp.date)}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${exp.expenseId}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${exp.category}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${exp.description}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0; font-weight: 600;">${formatCurrency(exp.amount)}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${exp.paidBy}</td></tr>`;
+  });
+  html += `</tbody></table><div style="margin-top: 30px;"><h4 style="color: #0d47a1; font-size: 18px; font-weight: bold; margin-bottom: 15px;">Summary by Category</h4>`;
+  Object.entries(report.summary).forEach(([category,amount]) => {
+    html += `<div style="display: flex; justify-content: space-between; padding: 8px 0; color: #1565c0;"><span>${category}</span><span style="font-weight: 600;">${formatCurrency(amount)}</span></div>`;
+  });
+  html += `<div style="display: flex; justify-content: space-between; padding: 12px 0; color: #0d47a1; font-size: 20px; font-weight: bold; border-top: 3px double #1565c0; margin-top: 15px;"><span>TOTAL EXPENSES</span><span>${formatCurrency(report.totalExpenses)}</span></div></div></div>`;
+  document.getElementById('reportExpenses').innerHTML = html;
+}
+
+function displayCustomerReport(report) {
+  let html = `<div style="background: white; color: #1565c0; padding: 40px; border-radius: 10px;"><div style="text-align: center; border-bottom: 3px solid #1565c0; padding-bottom: 20px; margin-bottom: 30px;"><h2 style="font-size: 28px; color: #1565c0; margin-bottom: 10px;">${report.companyName}</h2><h3 style="font-size: 22px; color: #1565c0; font-weight: bold;">${report.reportTitle}</h3><p style="color: #1565c0; margin-top: 10px;">Total Customers: ${report.totalCustomers} | Active: ${report.activeCustomers}</p></div><table style="width: 100%; border-collapse: collapse; color: #1565c0;"><thead><tr style="background: #1565c0; color: white;"><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Customer</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Company</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Trips</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Total Billed</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Total Paid</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Balance</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Status</th></tr></thead><tbody>`;
+  report.customers.forEach(customer => {
+    html += `<tr><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${customer.customerName}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${customer.companyName||'-'}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0;">${customer.totalTrips}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0; font-weight: 600;">${formatCurrency(customer.totalBilled)}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0;">${formatCurrency(customer.totalPaid)}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0; font-weight: bold; color: ${customer.balance>0?'#ff9800':'#4caf50'};">${formatCurrency(customer.balance)}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${customer.status}</td></tr>`;
+  });
+  html += `</tbody></table></div>`;
+  document.getElementById('reportCustomer').innerHTML = html;
+}
+
+function displayDriversReport(report) {
+  let html = `<div style="background: white; color: #1565c0; padding: 40px; border-radius: 10px;"><div style="text-align: center; border-bottom: 3px solid #1565c0; padding-bottom: 20px; margin-bottom: 30px;"><h2 style="font-size: 28px; color: #1565c0; margin-bottom: 10px;">${report.companyName}</h2><h3 style="font-size: 22px; color: #1565c0; font-weight: bold;">${report.reportTitle}</h3><p style="color: #1565c0; margin-top: 10px;">Total Drivers: ${report.totalDrivers} | Active: ${report.activeDrivers}</p><p style="color: #1565c0;">Period: ${currentReports.dateRange?formatDate(currentReports.dateRange.startDate)+' - '+formatDate(currentReports.dateRange.endDate):''}</p></div><table style="width: 100%; border-collapse: collapse; color: #1565c0;"><thead><tr style="background: #1565c0; color: white;"><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Driver</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Trips</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Revenue</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Profit</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Est. Pay</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Status</th></tr></thead><tbody>`;
+  report.drivers.forEach(driver => {
+    html += `<tr><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${driver.driverName}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0;">${driver.totalTrips}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0; font-weight: 600;">${formatCurrency(driver.totalRevenue)}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0;">${formatCurrency(driver.totalProfit)}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0; font-weight: bold;">${formatCurrency(driver.estimatedPay)}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${driver.status}</td></tr>`;
+  });
+  html += `</tbody></table></div>`;
+  document.getElementById('reportDrivers').innerHTML = html;
+}
+
+function displayAccountsReceivableReport(report) {
+  let html = `<div style="background: white; color: #1565c0; padding: 40px; border-radius: 10px;"><div style="text-align: center; border-bottom: 3px solid #1565c0; padding-bottom: 20px; margin-bottom: 30px;"><h2 style="font-size: 28px; color: #1565c0; margin-bottom: 10px;">${report.companyName}</h2><h3 style="font-size: 22px; color: #1565c0; font-weight: bold;">${report.reportTitle}</h3><p style="color: #1565c0; margin-top: 10px;">Total Outstanding: ${formatCurrency(report.totalReceivables)}</p></div><table style="width: 100%; border-collapse: collapse; color: #1565c0;"><thead><tr style="background: #1565c0; color: white;"><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Customer</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Total Billed</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Total Paid</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Balance</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Credit Limit</th><th style="padding: 12px; text-align: center; border: 1px solid #1565c0;">Utilization %</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Terms</th></tr></thead><tbody>`;
+  report.receivables.forEach(ar => {
+    const utilizationColor = ar.utilizationPercent>90 ? '#c62828' : ar.utilizationPercent>70 ? '#ff9800' : '#4caf50';
+    html += `<tr><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${ar.customerName}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0;">${formatCurrency(ar.totalBilled)}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0;">${formatCurrency(ar.totalPaid)}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0; font-weight: bold; color: ${ar.balance>0?'#ff9800':'#4caf50'};">${formatCurrency(ar.balance)}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0;">${formatCurrency(ar.creditLimit)}</td><td style="padding: 8px 12px; text-align: center; border: 1px solid #e0e0e0; font-weight: bold; color: ${utilizationColor};">${ar.utilizationPercent}%</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${ar.paymentTerms}</td></tr>`;
+  });
+  html += `<tr style="background: #e3f2fd; font-weight: bold; border-top: 3px solid #1565c0;"><td style="padding: 12px; border: 1px solid #1565c0;">TOTAL</td><td style="padding: 12px; text-align: right; border: 1px solid #1565c0;">${formatCurrency(report.totalBilled)}</td><td style="padding: 12px; text-align: right; border: 1px solid #1565c0;">${formatCurrency(report.totalPaid)}</td><td style="padding: 12px; text-align: right; border: 1px solid #1565c0;">${formatCurrency(report.totalReceivables)}</td><td colspan="3" style="padding: 12px; border: 1px solid #1565c0;"></td></tr></tbody></table></div>`;
+  document.getElementById('reportReceivables').innerHTML = html;
+}
+
+function displayPaymentsReport(report) {
+  let html = `<div style="background: white; color: #1565c0; padding: 40px; border-radius: 10px;"><div style="text-align: center; border-bottom: 3px solid #1565c0; padding-bottom: 20px; margin-bottom: 30px;"><h2 style="font-size: 28px; color: #1565c0; margin-bottom: 10px;">${report.companyName}</h2><h3 style="font-size: 22px; color: #1565c0; font-weight: bold;">${report.reportTitle}</h3><p style="color: #1565c0; margin-top: 10px;">Period: ${currentReports.dateRange?formatDate(currentReports.dateRange.startDate)+' - '+formatDate(currentReports.dateRange.endDate):''}</p><p style="color: #1565c0;">Total Collected: ${formatCurrency(report.totalPayments)} | Transactions: ${report.totalTransactions}</p></div><table style="width: 100%; border-collapse: collapse; color: #1565c0; margin-bottom: 30px;"><thead><tr style="background: #1565c0; color: white;"><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Date</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Payment ID</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Customer</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Amount</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Method</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Reference</th></tr></thead><tbody>`;
+  report.payments.forEach(payment => {
+    html += `<tr><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${formatDate(payment.paymentDate)}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${payment.paymentId}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${payment.customerName}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0; font-weight: 600;">${formatCurrency(payment.amount)}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${payment.paymentMethod}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${payment.referenceNumber||'-'}</td></tr>`;
+  });
+  html += `</tbody></table><div style="margin-top: 30px;"><h4 style="color: #0d47a1; font-size: 18px; font-weight: bold; margin-bottom: 15px;">Summary by Payment Method</h4>`;
+  Object.entries(report.paymentsByMethod).forEach(([method,amount]) => {
+    html += `<div style="display: flex; justify-content: space-between; padding: 8px 0; color: #1565c0;"><span>${method}</span><span style="font-weight: 600;">${formatCurrency(amount)}</span></div>`;
+  });
+  html += `<div style="display: flex; justify-content: space-between; padding: 12px 0; color: #0d47a1; font-size: 20px; font-weight: bold; border-top: 3px double #1565c0; margin-top: 15px;"><span>TOTAL PAYMENTS</span><span>${formatCurrency(report.totalPayments)}</span></div></div></div>`;
+  document.getElementById('reportPayments').innerHTML = html;
+}
+
+function printReport() {
+  const reportMap = {'income':'reportIncome','trial':'reportTrial','profitloss':'reportProfitLoss','expenses':'reportExpenses','customer':'reportCustomer','drivers':'reportDrivers','receivables':'reportReceivables','payments':'reportPayments'};
+  const elementId = reportMap[currentActiveReport];
+  const element = document.getElementById(elementId);
+  if(!element) { showAlert('Please generate reports first', 'error'); return; }
+  const printWindow = window.open('','','width=800,height=600');
+  printWindow.document.write(element.innerHTML);
+  printWindow.document.close();
+  printWindow.print();
+}
+
+function downloadReportPDF() {
+  const reportMap = {'income':'reportIncome','trial':'reportTrial','profitloss':'reportProfitLoss','expenses':'reportExpenses','customer':'reportCustomer','drivers':'reportDrivers','receivables':'reportReceivables','payments':'reportPayments'};
+  const elementId = reportMap[currentActiveReport];
+  const element = document.getElementById(elementId);
+  if(!element) { showAlert('Please generate reports first', 'error'); return; }
+  showLoading(true);
+  html2canvas(element).then(canvas => {
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jspdf.jsPDF();
+    const imgWidth = 190;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
+    pdf.save(currentActiveReport + '-report.pdf');
+    showLoading(false);
+    showAlert('PDF downloaded successfully!', 'success');
+  }).catch(error => {
+    showLoading(false);
+    showAlert('Error generating PDF: ' + error.message, 'error');
+  });
+}
+
+function downloadReportExcel() {
+  if(!currentReports || Object.keys(currentReports).length === 0) {
+    showAlert('Please generate reports first', 'error'); return;
+  }
+  const wb = XLSX.utils.book_new();
+  function addReportSheet(sheetName, data, columns) {
+    const ws_data = [columns];
+    data.forEach(row => {
+      const rowData = columns.map(col => row[col] !== undefined ? row[col] : '');
+      ws_data.push(rowData);
+    });
+    const ws = XLSX.utils.aoa_to_sheet(ws_data);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  }
+  if(currentReports.customerReport) addReportSheet('Customers', currentReports.customerReport.customers, ['customerName','companyName','totalTrips','totalBilled','totalPaid','balance','status']);
+  if(currentReports.driversReport) addReportSheet('Drivers', currentReports.driversReport.drivers, ['driverName','totalTrips','totalRevenue','totalProfit','estimatedPay','status']);
+  if(currentReports.expensesReport) addReportSheet('Expenses', currentReports.expensesReport.expenses, ['date','expenseId','category','description','amount','paidBy','paymentMethod']);
+  if(currentReports.paymentsReport) addReportSheet('Payments', currentReports.paymentsReport.payments, ['paymentDate','paymentId','customerName','amount','paymentMethod','referenceNumber']);
+  if(currentReports.accountsReceivable) addReportSheet('Receivables', currentReports.accountsReceivable.receivables, ['customerName','totalBilled','totalPaid','balance','creditLimit','paymentTerms']);
+  
+  XLSX.writeFile(wb, 'reyna-business-reports.xlsx');
+  showAlert('Excel file downloaded successfully!', 'success');
+}
+
+function showLoading(show) {
+  const loading = document.getElementById('loading');
+  if(show) loading.classList.add('active');
+  else loading.classList.remove('active');
+}
+
+function showAlert(message, type) {
+  const alert = document.getElementById('alert');
+  alert.textContent = message;
+  alert.className = 'alert ' + type;
+  alert.style.display = 'block';
+  setTimeout(() => { alert.style.display = 'none'; }, 5000);
+}
+
+window.onclick = function(event) {
+  const statementModal = document.getElementById('statementModal');
+  const invoiceModal = document.getElementById('invoiceModal');
+  if(event.target == statementModal) closeStatementModal();
+  if(event.target == invoiceModal) closeInvoiceModal();
+}
+</script>
+<script>
+/* ===== Accounts (admin) and Change Password ===== */
+(function () {
+  var me = window.__USER__ || {};
+  var shown = me.fullName || me.username || '';
+  document.getElementById('acctName').textContent = shown;
+  document.getElementById('acctAvatar').textContent = (shown.trim().charAt(0) || '?').toUpperCase();
+  document.getElementById('acctHeadName').textContent = shown;
+  document.getElementById('acctHeadSub').textContent = (me.username ? '@' + me.username + ' \u00b7 ' : '') + (me.role === 'admin' ? 'Admin' : 'Employee');
+  // Cosmetic only: the server refuses these actions for non-admins anyway.
+  if (me.role !== 'admin') {
+    var b = document.getElementById('usersNavBtn'); if (b) b.remove();
+    var s = document.getElementById('users'); if (s) s.remove();
+  }
+})();
+
+/* Account dropdown (fixed-position so the scrolling nav bar cannot clip it) */
+function usrCloseMenu() {
+  var m = document.getElementById('acctMenu'), b = document.getElementById('acctBtn');
+  if (m) m.classList.remove('open'); if (b) b.setAttribute('aria-expanded', 'false');
+}
+function usrToggleMenu(ev) {
+  ev.stopPropagation();
+  var m = document.getElementById('acctMenu'), b = document.getElementById('acctBtn');
+  if (m.classList.contains('open')) { usrCloseMenu(); return; }
+  var r = b.getBoundingClientRect();
+  m.style.top = (r.bottom + 6) + 'px'; m.style.left = 'auto'; m.style.right = Math.max(8, window.innerWidth - r.right) + 'px';
+  m.classList.add('open'); b.setAttribute('aria-expanded', 'true');
+}
+function usrGoUsers(ev) {
+  usrCloseMenu();
+  showSection('users');                                   // marks the clicked item active, so undo that
+  if (ev && ev.target) ev.target.classList.remove('active');
+  document.getElementById('acctBtn').classList.add('active');   // highlight the account button instead
+  usrLoadUsers();
+}
+document.addEventListener('click', function (e) { var a = document.getElementById('acct'); if (a && !a.contains(e.target)) usrCloseMenu(); });
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') usrCloseMenu(); });
+window.addEventListener('resize', usrCloseMenu);
+
+function usrEsc(v) { var d = document.createElement('div'); d.textContent = v == null ? '' : String(v); return d.innerHTML; }
+function usrFmtDate(v) { if (!v) return 'Never'; var d = new Date(v); return isNaN(d) ? '' : d.toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }); }
+
+function usrLoadUsers() {
+  var box = document.getElementById('usrTableContainer'); if (!box) return;
+  google.script.run.withSuccessHandler(function (rows) {
+    if (!rows || !rows.length) { box.innerHTML = '<p class="usr-note">No accounts yet.</p>'; return; }
+    var me = (window.__USER__ || {}).username;
+    var html = '<table class="data-table"><thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th><th>Last Sign-in</th><th>Created By</th><th>Actions</th></tr></thead><tbody>';
+    rows.forEach(function (u) {
+      var active = u.is_active !== false;
+      var status = !active ? '<span class="usr-badge off">Disabled</span>' : (u.must_change_password ? '<span class="usr-badge wait">Awaiting first sign-in</span>' : '<span class="usr-badge on">Active</span>');
+      var acts = '';
+      if (u.username !== me) {
+        acts = '<button class="invoice-btn" onclick="usrToggle(\'' + u.username + '\',' + (active ? 'false' : 'true') + ')">' + (active ? 'Disable' : 'Enable') + '</button> ' +
+               '<button class="invoice-btn" onclick="usrReset(\'' + u.username + '\')">Reset Password</button>';
+      } else { acts = '<span class="usr-note">You</span>'; }
+      html += '<tr><td>' + usrEsc(u.full_name) + '</td><td>' + usrEsc(u.username) + '</td><td>' + (u.role === 'admin' ? 'Admin' : 'Employee') + '</td><td>' + status +
+              '</td><td>' + usrEsc(usrFmtDate(u.last_login)) + '</td><td>' + usrEsc(u.created_by || '') + '</td><td>' + acts + '</td></tr>';
+    });
+    box.innerHTML = html + '</tbody></table>';
+  }).withFailureHandler(function (e) { box.innerHTML = '<p class="usr-note">Could not load accounts: ' + usrEsc(e && e.message) + '</p>'; }).listUsers();
+}
+
+function usrShowPw(title, who, pw) {
+  document.getElementById('usrPwTitle').textContent = title;
+  document.getElementById('usrPwWho').textContent = who;
+  document.getElementById('usrPwValue').textContent = pw;
+  document.getElementById('usrPwModal').style.display = 'block';
+}
+function usrClosePw() { document.getElementById('usrPwModal').style.display = 'none'; document.getElementById('usrPwValue').textContent = ''; }
+function usrCopyPw() {
+  var t = document.getElementById('usrPwValue').textContent;
+  try { navigator.clipboard.writeText(t).then(function () { showAlert('Copied', 'success'); }, function () { usrCopyFallback(); }); } catch (e) { usrCopyFallback(); }
+}
+function usrCopyFallback() {
+  var r = document.createRange(); r.selectNodeContents(document.getElementById('usrPwValue'));
+  var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+  try { document.execCommand('copy'); showAlert('Copied', 'success'); } catch (e) { showAlert('Press Ctrl+C to copy the selected password', 'error'); }
+}
+
+function usrCreateUser() {
+  var data = { fullName: document.getElementById('usrFullName').value, username: document.getElementById('usrUsername').value, role: document.getElementById('usrRole').value };
+  showLoading(true);
+  google.script.run.withSuccessHandler(function (res) {
+    showLoading(false);
+    if (!res || !res.success) { showAlert((res && res.error) || 'Could not create the account.', 'error'); return; }
+    document.getElementById('usrFullName').value = ''; document.getElementById('usrUsername').value = ''; document.getElementById('usrRole').value = 'employee';
+    usrShowPw('Account created', res.fullName + ' (' + res.username + ')', res.tempPassword);
+    usrLoadUsers();
+  }).withFailureHandler(function (e) { showLoading(false); showAlert('Error: ' + ((e && e.message) || e), 'error'); }).createUser(data);
+}
+
+function usrToggle(username, makeActive) {
+  if (!makeActive && !confirm('Disable ' + username + '? They will be signed out and unable to sign in.')) return;
+  showLoading(true);
+  google.script.run.withSuccessHandler(function (res) {
+    showLoading(false);
+    if (!res || !res.success) { showAlert((res && res.error) || 'Could not update the account.', 'error'); return; }
+    showAlert(makeActive ? 'Account enabled' : 'Account disabled', 'success'); usrLoadUsers();
+  }).withFailureHandler(function (e) { showLoading(false); showAlert('Error: ' + ((e && e.message) || e), 'error'); }).setUserActive(username, makeActive);
+}
+
+function usrReset(username) {
+  if (!confirm('Reset the password for ' + username + '? Their current password will stop working.')) return;
+  showLoading(true);
+  google.script.run.withSuccessHandler(function (res) {
+    showLoading(false);
+    if (!res || !res.success) { showAlert((res && res.error) || 'Could not reset the password.', 'error'); return; }
+    usrShowPw('Password reset', res.username, res.tempPassword); usrLoadUsers();
+  }).withFailureHandler(function (e) { showLoading(false); showAlert('Error: ' + ((e && e.message) || e), 'error'); }).resetUserPassword(username);
+}
+
+function usrOpenChangePw() {
+  ['usrCurPw', 'usrNewPw', 'usrNewPw2'].forEach(function (id) { document.getElementById(id).value = ''; });
+  document.getElementById('usrChangePwModal').style.display = 'block';
+}
+function usrCloseChangePw() { document.getElementById('usrChangePwModal').style.display = 'none'; }
+function usrSubmitChangePw() {
+  var cur = document.getElementById('usrCurPw').value, n1 = document.getElementById('usrNewPw').value, n2 = document.getElementById('usrNewPw2').value;
+  if (!cur || !n1) { showAlert('Fill in all the fields.', 'error'); return; }
+  if (n1 !== n2) { showAlert('The new passwords do not match.', 'error'); return; }
+  showLoading(true);
+  google.script.run.withSuccessHandler(function (res) {
+    showLoading(false);
+    if (!res || !res.success) { showAlert((res && res.message) || 'Could not change the password.', 'error'); return; }
+    usrCloseChangePw(); showAlert('Password changed', 'success');
+  }).withFailureHandler(function (e) { showLoading(false); showAlert('Error: ' + ((e && e.message) || e), 'error'); }).changePassword(cur, n1);
+}
+</script>
+<script>
+/* ===== Availability status for drivers, helpers and trucks ===== */
+var RES_STATUSES = {
+  drivers: ['Active', 'Day Off', 'Unavailable', 'Resigned'],
+  helpers: ['Active', 'Day Off', 'Unavailable', 'Resigned'],
+  trucks:  ['Active', 'Under Maintenance', 'Unavailable']
+};
+var RES_LABEL = { drivers: 'driver', helpers: 'helper', trucks: 'truck' };
+var resCurrent = null;
+
+function resIsAvailable(status) { var s = String(status == null ? '' : status).trim().toLowerCase(); return s === '' || s === 'active'; }
+function resAttr(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+function resBadge(status) {
+  var s = String(status || '').trim() || 'Active';
+  var cls = s === 'Active' ? 'on' : (s === 'Resigned' || s === 'Unavailable' ? 'off' : 'wait');
+  return '<span class="usr-badge ' + cls + '">' + usrEsc(s) + '</span>';
+}
+
+function createStatusTable(containerId, data, columns, type, idCol, nameCol) {
+  var box = document.getElementById(containerId);
+  if (!data || !data.length) { box.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">No data available</p>'; return; }
+  var html = '<table class="data-table"><thead><tr>';
+  columns.forEach(function (c) { html += '<th>' + c + '</th>'; });
+  html += '<th>Action</th></tr></thead><tbody>';
+  data.forEach(function (row) {
+    html += '<tr>';
+    columns.forEach(function (col) {
+      var v = row[col];
+      if (col === 'Status') { html += '<td>' + resBadge(v) + '</td>'; return; }
+      if (col.indexOf('Rate') > -1) v = '\u20b1' + parseFloat(v || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 });
+      html += '<td>' + (v ? usrEsc(v) : '-') + '</td>';
+    });
+    html += '<td><button type="button" class="invoice-btn" data-type="' + type + '" data-id="' + resAttr(row[idCol]) + '" data-name="' + resAttr(row[nameCol]) + '" data-status="' + resAttr(row['Status']) + '" onclick="resOpenStatus(this)">Update Status</button></td></tr>';
+  });
+  box.innerHTML = html + '</tbody></table>';
+}
+
+function resOpenStatus(btn) {
+  resCurrent = { type: btn.dataset.type, id: btn.dataset.id, name: btn.dataset.name };
+  var current = btn.dataset.status || 'Active';
+  document.getElementById('resStatusTitle').textContent = 'Update ' + RES_LABEL[resCurrent.type] + ' status';
+  document.getElementById('resStatusWho').textContent = resCurrent.name + ' (' + resCurrent.id + ')';
+  document.getElementById('resStatusHint').textContent = 'Anything other than Active hides this ' + RES_LABEL[resCurrent.type] + ' from the choices when creating a trip.';
+  var sel = document.getElementById('resStatusSelect');
+  sel.innerHTML = RES_STATUSES[resCurrent.type].map(function (s) { return '<option' + (s === current ? ' selected' : '') + '>' + s + '</option>'; }).join('');
+  document.getElementById('resStatusModal').style.display = 'block';
+}
+function resCloseStatus() { document.getElementById('resStatusModal').style.display = 'none'; }
+function resSaveStatus() {
+  if (!resCurrent) return;
+  var status = document.getElementById('resStatusSelect').value;
+  showLoading(true);
+  google.script.run.withSuccessHandler(function (res) {
+    showLoading(false);
+    if (!res || !res.success) { showAlert((res && res.error) || 'Could not update the status.', 'error'); return; }
+    resCloseStatus(); showAlert('Status updated to ' + status, 'success');
+    loadData();
+  }).withFailureHandler(function (e) { showLoading(false); showAlert('Error: ' + ((e && e.message) || e), 'error'); })
+    .updateResourceStatus(resCurrent.type, resCurrent.id, status);
+}
+</script>
+</body>
+</html>

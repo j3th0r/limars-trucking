@@ -770,173 +770,7 @@
   </div>
 </div>
 
-<script>
-// --- REVISED JAVASCRIPT FUNCTIONS ---
 
-function addTrip() {
-  const tripId = document.getElementById('editTripId').value;
-  const driverSelect = document.getElementById('tripDriver');
-  const customerSelect = document.getElementById('tripCustomer');
-  const vatStatus = document.getElementById('tripVatStatus').value;
-  
-  // Base Inputs
-  const tripRate = parseFloat(document.getElementById('tripRate').value) || 0;
-  const customerSubsidy = parseFloat(document.getElementById('tripSubsidy').value) || 0;
-
-  // Validation
-  if (!driverSelect.value || !customerSelect.value) {
-    showAlert('Please select a driver and a customer.', 'error');
-    return;
-  }
-
-  /**
-   * ACCOUNTING REVISION: 
-   * 1. Freight Hauling Service = tripRate
-   * 2. Total Taxable Amount = tripRate
-   * 3. VAT 12% = tripRate * 0.12 (if applicable)
-   * 4. Sub Total = Taxable Amount + VAT
-   * 5. Total = Sub Total + Subsidy
-   */
-  const freightHaulingService = tripRate;
-  const totalTaxableAmount = freightHaulingService;
-  const vatAmount = (vatStatus === 'VAT') ? (totalTaxableAmount * 0.12) : 0;
-  const subTotal = totalTaxableAmount + vatAmount;
-  const finalTotalDue = subTotal + customerSubsidy;
-
-  // Collect Truck Data
-  const selectedTrucks = [];
-  document.querySelectorAll('.trip-truck-plate').forEach(select => { 
-    if (select.value) selectedTrucks.push(select.value); 
-  });
-  
-  // Collect Helper Data
-  const selectedHelpers = [];
-  let totalHelpersPay = 0;
-  document.querySelectorAll('.trip-helper-select').forEach(select => {
-    const name = select.value;
-    const pay = parseFloat(select.parentElement.querySelector('.trip-helper-pay').value) || 0;
-    if (name) {
-      selectedHelpers.push({ name: name, pay: pay });
-      totalHelpersPay += pay;
-    }
-  });
-  
-  // Prepare Data Object for Server
-  const tripData = {
-    tripId: tripId, 
-    date: document.getElementById('tripDate').value,
-    driverId: driverSelect.value,
-    driverName: driverSelect.options[driverSelect.selectedIndex].textContent,
-    customerName: customerSelect.options[customerSelect.selectedIndex].textContent,
-    origin: document.getElementById('tripOrigin').value,
-    destination: document.getElementById('tripDestination').value,
-    distance: parseFloat(document.getElementById('tripDistance').value) || 0,
-    cargoType: document.getElementById('tripCargo').value,
-    weight: parseFloat(document.getElementById('tripWeight').value) || 0,
-    
-    // Revised Calculation Fields
-    tripRate: freightHaulingService,       // Freight Hauling Service
-    taxableAmount: totalTaxableAmount,    // Total Taxable Amount
-    vatAmount: vatAmount,                 // VAT 12%
-    subTotal: subTotal,                   // Sub Total (Rate + VAT)
-    customerSubsidy: customerSubsidy,     // Add-on Subsidy (Non-taxable)
-    grossIncome: finalTotalDue,           // Total (The final billing amount)
-    
-    vatStatus: vatStatus,
-    fuelCost: parseFloat(document.getElementById('tripFuel').value) || 0,
-    tollFee: parseFloat(document.getElementById('tripToll').value) || 0,
-    mealAllowance: parseFloat(document.getElementById('tripMeal').value) || 0,
-    otherExpenses: parseFloat(document.getElementById('tripOther').value) || 0,
-    driverPay: parseFloat(document.getElementById('tripDriverPay').value) || 0,
-    notes: document.getElementById('tripNotes').value,
-    trucksData: selectedTrucks.join(', '),
-    helpersData: JSON.stringify(selectedHelpers)
-  };
-  
-  // Calculate Expenses and Profit
-  tripData.totalExpenses = tripData.fuelCost + tripData.tollFee + tripData.mealAllowance + 
-                           tripData.otherExpenses + tripData.driverPay + totalHelpersPay;
-  
-  tripData.netProfit = tripData.grossIncome - tripData.totalExpenses;
-  
-  showLoading(true);
-  
-  // Determine if we are adding new or updating existing
-  const serverFunction = tripId ? "updateTripInServer" : "addTrip";
-  
-  google.script.run.withSuccessHandler(function(result) {
-    if(result.success) {
-      showAlert(tripId ? 'Trip Updated!' : 'Trip Added!', 'success');
-      resetTripForm();
-      loadData();
-    } else {
-      showAlert('Error: ' + result.error, 'error');
-    }
-    showLoading(false);
-  })[serverFunction](tripData);
-}
-function editTrip(tripId) {
-  const trip = globalData.trips.find(t => t['Trip ID'] === tripId);
-  if (!trip) return;
-
-  // 1. Set the Hidden ID so the app knows we are UPDATING, not ADDING
-  document.getElementById('editTripId').value = tripId;
-  
-  // 2. Update UI labels
-  document.getElementById('tripFormTitle').innerHTML = "Editing Trip: <span style='color:white'>" + tripId + "</span>";
-  const saveBtn = document.getElementById('saveTripBtn');
-  saveBtn.textContent = "UPDATE & SAVE CHANGES";
-  saveBtn.style.background = "linear-gradient(135deg, #1565c0 0%, #0d47a1 100%)";
-  document.getElementById('cancelEditBtn').style.display = "inline-block";
-
-  // 3. Fill basic fields
-  document.getElementById('tripDate').value = new Date(trip['Date']).toISOString().split('T')[0];
-  document.getElementById('tripRate').value = trip['Trip Rate'];
-  document.getElementById('tripSubsidy').value = trip['Customer Subsidy'] || 0;
-  document.getElementById('tripVatStatus').value = trip['VAT Status'] || "VAT";
-  document.getElementById('tripOrigin').value = trip['Origin'];
-  document.getElementById('tripDestination').value = trip['Destination'];
-  document.getElementById('tripDistance').value = trip['Distance'];
-  document.getElementById('tripCargo').value = trip['Cargo Type'];
-  document.getElementById('tripWeight').value = trip['Weight'];
-  document.getElementById('tripFuel').value = trip['Fuel Cost'];
-  document.getElementById('tripToll').value = trip['Toll Fee'];
-  document.getElementById('tripMeal').value = trip['Meal Allowance'];
-  document.getElementById('tripOther').value = trip['Other Trip Expenses'];
-  document.getElementById('tripDriverPay').value = trip['Driver Pay'];
-  document.getElementById('tripNotes').value = trip['Notes'];
-
-  // 4. Handle Dynamic Trucks
-  const truckContainer = document.getElementById('trucksContainer');
-  truckContainer.innerHTML = ''; // Clear current
-  if (trip['Trucks Data']) {
-    const plates = trip['Trucks Data'].split(', ');
-    plates.forEach(plate => {
-      addTruckRow(); // Use your existing function to add a row
-      const lastRow = truckContainer.lastElementChild;
-      lastRow.querySelector('select').value = plate;
-    });
-  }
-
-  // 5. Handle Dynamic Helpers
-  const helperContainer = document.getElementById('helpersContainer');
-  helperContainer.innerHTML = ''; // Clear current
-  if (trip['Helpers Data']) {
-    try {
-      const helpers = JSON.parse(trip['Helpers Data']);
-      helpers.forEach(h => {
-        addHelperRow(); // Use your existing function
-        const lastRow = helperContainer.lastElementChild;
-        lastRow.querySelector('select').value = h.name;
-        lastRow.querySelector('input').value = h.pay;
-      });
-    } catch (e) { console.log("No helpers JSON found"); }
-  }
-
-  // 6. Smooth scroll to the form
-  document.getElementById('trips').scrollIntoView({ behavior: 'smooth' });
-}
-</script>
 
     <!-- Trucks Section -->
     <div id="trucks" class="content-section">
@@ -1628,6 +1462,7 @@ function populateDropdowns(data) {
       option.value = driver['Driver ID'];
       option.textContent = driver['Driver Name'];
       if (!resIsAvailable(driver['Status'])) { option.textContent += ' (' + driver['Status'] + ')'; option.disabled = true; }
+      option.dataset.name = driver['Driver Name'];
       option.dataset.driverRate = parseFloat(String(driver['Driver Rate']).replace(/[^0-9.-]/g, '')) || 0;
       tripDriver.appendChild(option);
     });
@@ -1754,7 +1589,7 @@ function createTripsTableWithInvoice(containerId, trips) {
       <td>
         <button class="invoice-btn" onclick="viewTripInvoice('${trip['Trip ID']}')" title="Invoice">Invoice</button>
         <button class="invoice-btn" style="background:#4caf50" onclick="editTrip('${trip['Trip ID']}')" title="Edit">Edit</button>
-        <button class="invoice-btn" style="background:#f44336" onclick="deleteTrip('${trip['Trip ID']}')" title="Delete">Delete</button>
+        ${(window.__USER__ && window.__USER__.role === 'admin') ? `<button class="invoice-btn" style="background:#f44336" onclick="deleteTrip('${trip['Trip ID']}')" title="Delete">Delete</button>` : ''}
       </td>
     </tr>`;
   });
@@ -2189,6 +2024,7 @@ function addTrip() {
   }
   // ---------------------
 
+  const editingId = document.getElementById('editTripId').value;
   const selectedTrucks = [];
   document.querySelectorAll('.trip-truck-plate').forEach(select => {
     if (select.value) selectedTrucks.push(select.value);
@@ -2205,7 +2041,7 @@ function addTrip() {
   const tripData = {
     date: document.getElementById('tripDate').value,
     driverId: driverSelect.value,
-    driverName: driverSelect.options[driverSelect.selectedIndex].textContent,
+    driverName: driverSelect.options[driverSelect.selectedIndex].dataset.name || driverSelect.options[driverSelect.selectedIndex].textContent,
     customerName: customerSelect.options[customerSelect.selectedIndex].textContent,
     origin: document.getElementById('tripOrigin').value,
     destination: document.getElementById('tripDestination').value,
@@ -2232,18 +2068,38 @@ function addTrip() {
   // Apply the VAT-adjusted rate to Gross Income
   tripData.grossIncome = finalGrossBilled + tripData.customerSubsidy;
   tripData.netProfit = tripData.grossIncome - tripData.totalExpenses;
-  
+  if (editingId) tripData.tripId = editingId;
+
   showLoading(true);
   google.script.run.withSuccessHandler(function(result) {
-    if(result.success) {
-      showAlert('Trip saved successfully!', 'success');
-      loadData();
-      // Reset form logic here...
-    } else {
-      showAlert('Error: ' + result.error, 'error');
-    }
     showLoading(false);
-  }).addTrip(tripData);
+    if (result && result.success) {
+      showAlert(editingId ? 'Trip updated successfully!' : 'Trip saved successfully!', 'success');
+      resetTripForm();
+      loadData();
+    } else {
+      showAlert('Error: ' + ((result && result.error) || 'Could not save the trip.'), 'error');
+    }
+  }).withFailureHandler(function(error) {
+    showLoading(false);
+    showAlert('Error: ' + ((error && error.message) || error), 'error');
+  })[editingId ? 'updateTripInServer' : 'addTrip'](tripData);
+}
+
+function resetTripForm() {
+  document.getElementById('editTripId').value = '';
+  document.getElementById('tripFormTitle').textContent = 'Add New Trip';
+  const saveBtn = document.getElementById('saveTripBtn');
+  saveBtn.textContent = 'Save Trip'; saveBtn.style.background = '';
+  document.getElementById('cancelEditBtn').style.display = 'none';
+  ['tripRate','tripSubsidy','tripOrigin','tripDestination','tripDistance','tripCargo','tripWeight','tripFuel','tripToll','tripMeal','tripOther','tripDriverPay','tripNotes']
+    .forEach(function(id) { document.getElementById(id).value = ''; });
+  document.getElementById('tripDriver').value = '';
+  document.getElementById('tripCustomer').value = '';
+  const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  document.getElementById('tripDate').value = d.toISOString().slice(0, 10);
+  document.getElementById('trucksContainer').innerHTML = '';
+  document.getElementById('helpersContainer').innerHTML = '';
 }
 
 // MODIFIED: Table with Edit and Delete Buttons
@@ -2269,7 +2125,7 @@ function createTripsTableWithInvoice(containerId, trips) {
       <td>
         <button class="invoice-btn" onclick="viewTripInvoice('${trip['Trip ID']}')">Invoice</button>
         <button class="btn-success" style="padding:5px 10px; border-radius:4px; border:none; cursor:pointer;" onclick="editTrip('${trip['Trip ID']}')">Edit</button>
-        <button class="btn-danger" style="padding:5px 10px; border-radius:4px; border:none; cursor:pointer;" onclick="deleteTrip('${trip['Trip ID']}')">Delete</button>
+        ${(window.__USER__ && window.__USER__.role === 'admin') ? `<button class="btn-danger" style="padding:5px 10px; border-radius:4px; border:none; cursor:pointer;" onclick="deleteTrip('${trip['Trip ID']}')">Delete</button>` : ''}
       </td>
     </tr>`;
   });
@@ -2277,31 +2133,59 @@ function createTripsTableWithInvoice(containerId, trips) {
   container.innerHTML = html;
 }
 
-// NEW: Delete Function
 function deleteTrip(tripId) {
-  if(confirm("Are you sure you want to delete Trip " + tripId + "? This cannot be undone.")) {
-    showLoading(true);
-    google.script.run.withSuccessHandler(function(res) {
-      showAlert("Trip deleted.", "success");
-      loadData();
-    }).deleteTripFromServer(tripId);
-  }
+  if (!confirm('Are you sure you want to delete Trip ' + tripId + '? This cannot be undone.')) return;
+  showLoading(true);
+  google.script.run.withSuccessHandler(function(res) {
+    showLoading(false);
+    if (res && res.success) { showAlert('Trip deleted.', 'success'); loadData(); }
+    else showAlert('Error: ' + ((res && res.error) || 'Could not delete the trip.'), 'error');
+  }).withFailureHandler(function(error) {
+    showLoading(false);
+    showAlert('Error: ' + ((error && error.message) || error), 'error');
+  }).deleteTripFromServer(tripId);
 }
 
-// NEW: Edit Function (Basic implementation: scrolls to form and fills data)
 function editTrip(tripId) {
-  const trip = globalData.trips.find(t => t['Trip ID'] === tripId);
-  if(!trip) return;
-  
-  // Fill the form with existing data
-  document.getElementById('tripDate').value = new Date(trip['Date']).toISOString().split('T')[0];
-  document.getElementById('tripRate').value = trip['Trip Rate'];
-  document.getElementById('tripOrigin').value = trip['Origin'];
-  document.getElementById('tripDestination').value = trip['Destination'];
-  // ... fill other fields similarly ...
+  const trip = globalData.trips.find(function(t) { return t['Trip ID'] === tripId; });
+  if (!trip) return;
 
-  document.getElementById('trips').scrollIntoView({behavior: 'smooth'});
-  showAlert("Form filled with Trip " + tripId + " data. Modify and save to create a new entry (or update if you modify your Backend to support Update).", "success");
+  document.getElementById('editTripId').value = tripId;              // tells Save Trip to update, not add
+  document.getElementById('tripFormTitle').innerHTML = 'Editing Trip: <span></span>';
+  document.querySelector('#tripFormTitle span').textContent = tripId;
+  document.getElementById('saveTripBtn').textContent = 'Update Trip';
+  document.getElementById('cancelEditBtn').style.display = 'inline-block';
+
+  document.getElementById('tripDate').value = String(trip['Date'] || '').slice(0, 10);
+  document.getElementById('tripDriver').value = trip['Driver ID'] || '';
+  const customerSelect = document.getElementById('tripCustomer');
+  customerSelect.value = '';
+  Array.prototype.forEach.call(customerSelect.options, function(o) { if (o.textContent === trip['Customer Name']) customerSelect.value = o.value; });
+  const fields = { tripRate: 'Trip Rate', tripSubsidy: 'Customer Subsidy', tripOrigin: 'Origin', tripDestination: 'Destination', tripDistance: 'Distance',
+    tripCargo: 'Cargo Type', tripWeight: 'Weight', tripFuel: 'Fuel Cost', tripToll: 'Toll Fee', tripMeal: 'Meal Allowance', tripOther: 'Other Expenses',
+    tripDriverPay: 'Driver Pay', tripNotes: 'Notes' };
+  Object.keys(fields).forEach(function(id) { document.getElementById(id).value = trip[fields[id]] === undefined ? '' : trip[fields[id]]; });
+  document.getElementById('tripVatStatus').value = trip['VAT Status'] || 'VAT';
+
+  const truckContainer = document.getElementById('trucksContainer');
+  truckContainer.innerHTML = '';
+  String(trip['Trucks Data'] || '').split(',').map(function(p) { return p.trim(); }).filter(Boolean).forEach(function(plate) {
+    addTruckRow();
+    truckContainer.lastElementChild.querySelector('select').value = plate;
+  });
+
+  const helperContainer = document.getElementById('helpersContainer');
+  helperContainer.innerHTML = '';
+  try {
+    JSON.parse(trip['Helpers Data'] || '[]').forEach(function(h) {
+      addHelperRow();
+      const row = helperContainer.lastElementChild;
+      row.querySelector('select').value = h.name;
+      row.querySelector('input').value = h.pay;
+    });
+  } catch (e) { console.log('No helpers found for this trip'); }
+
+  document.getElementById('trips').scrollIntoView({ behavior: 'smooth' });
 }
 function addDriver() {
   const driverData = {

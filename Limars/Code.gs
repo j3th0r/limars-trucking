@@ -1,11 +1,10 @@
-// The spreadsheet this app reads and writes. The script is a standalone project,
-// so it is opened by ID instead of being "active". Change the ID to switch spreadsheets.
-const SPREADSHEET_ID = '10j4OVDsFrmSc2NtwOLaujqSj1_ivp-3QjVfoaFWUtDQ';
+/**
+ * REYNA ADVANCED TRACKER FOR TRUCKING BUSINESS - ENHANCED VERSION
+ * Complete Trucking Management System 
+ * Google Apps Script backend  +  Postgres (Supabase) database
+ */
 
-function getSS_() {
-  return SpreadsheetApp.openById(SPREADSHEET_ID);
-}
-
+// Logical table names used throughout the code.
 const SHEETS = {
   DRIVERS: 'Drivers',
   HELPERS: 'Helpers',
@@ -18,113 +17,137 @@ const SHEETS = {
   SETTINGS: 'Settings'
 };
 
-function initializeSheets() {
-  const ss = getSS_();
-  try {
-    let sheet = ss.getSheetByName(SHEETS.DRIVERS);
-    if (!sheet) {
-      sheet = ss.insertSheet(SHEETS.DRIVERS);
-      sheet.appendRow(['Driver ID', 'Driver Name', 'License Number', 'Contact Number', 'Address', 'Driver Rate', 'Status', 'Date Added']);
-      sheet.getRange('A1:H1').setFontWeight('bold').setBackground('#1565c0').setFontColor('#ffffff');
-    }
+// [display name used by the dashboard, database column, optional type]
+const TABLES_ = {
+  Drivers:   { table: 'drivers',   order: 'created_at.asc,driver_id.asc',   cols: [['Driver ID', 'driver_id'], ['Driver Name', 'driver_name'], ['License Number', 'license_number'], ['Contact Number', 'contact_number'], ['Address', 'address'], ['Driver Rate', 'driver_rate'], ['Status', 'status'], ['Date Added', 'date_added']] },
+  Helpers:   { table: 'helpers',   order: 'created_at.asc,helper_id.asc',   cols: [['Helper ID', 'helper_id'], ['Helper Name', 'helper_name'], ['Contact Number', 'contact_number'], ['Address', 'address'], ['Default Rate', 'default_rate'], ['Status', 'status'], ['Date Added', 'date_added']] },
+  Trucks:    { table: 'trucks',    order: 'created_at.asc,truck_id.asc',    cols: [['Truck ID', 'truck_id'], ['Plate Number', 'plate_number'], ['Model/Type', 'model_type'], ['Status', 'status'], ['Date Added', 'date_added']] },
+  Customers: { table: 'customers', order: 'created_at.asc,customer_id.asc', cols: [['Customer ID', 'customer_id'], ['Customer Name', 'customer_name'], ['Company Name', 'company_name'], ['Contact Number', 'contact_number'], ['Email', 'email'], ['Address', 'address'], ['Credit Limit', 'credit_limit'], ['Current Balance', 'current_balance'], ['Payment Terms', 'payment_terms'], ['Status', 'status'], ['Date Added', 'date_added']] },
+  Trips:     { table: 'trips',     order: 'created_at.asc,trip_id.asc',     cols: [['Trip ID', 'trip_id'], ['Date', 'trip_date'], ['Driver ID', 'driver_id'], ['Driver Name', 'driver_name'], ['Customer Name', 'customer_name'], ['Origin', 'origin'], ['Destination', 'destination'], ['Distance', 'distance'], ['Cargo Type', 'cargo_type'], ['Weight', 'weight'], ['Trip Rate', 'trip_rate'], ['Fuel Cost', 'fuel_cost'], ['Toll Fee', 'toll_fee'], ['Meal Allowance', 'meal_allowance'], ['Other Expenses', 'other_expenses'], ['Total Expenses', 'total_expenses'], ['Gross Income', 'gross_income'], ['Net Profit', 'net_profit'], ['Payment Status', 'payment_status'], ['Trip Status', 'trip_status'], ['Notes', 'notes'], ['Trucks Data', 'trucks_data'], ['Helpers Data', 'helpers_data', 'json'], ['Driver Pay', 'driver_pay'], ['Customer Subsidy', 'customer_subsidy'], ['VAT Status', 'vat_status']] },
+  Expenses:  { table: 'expenses',  order: 'created_at.asc,expense_id.asc',  cols: [['Expense ID', 'expense_id'], ['Date', 'expense_date'], ['Category', 'category'], ['Description', 'description'], ['Amount', 'amount'], ['Paid By', 'paid_by'], ['Payment Method', 'payment_method'], ['Receipt Number', 'receipt_number'], ['Notes', 'notes']] },
+  Payments:  { table: 'payments',  order: 'created_at.asc,payment_id.asc',  cols: [['Payment ID', 'payment_id'], ['Customer ID', 'customer_id'], ['Customer Name', 'customer_name'], ['Payment Date', 'payment_date'], ['Amount', 'amount'], ['Payment Method', 'payment_method'], ['Reference Number', 'reference_number'], ['Notes', 'notes'], ['Timestamp', 'created_at']] },
+  Routes:    { table: 'routes',    order: 'created_at.asc,route_id.asc',    cols: [['Route ID', 'route_id'], ['Origin', 'origin'], ['Destination', 'destination'], ['Distance', 'distance'], ['Base Rate', 'base_rate'], ['Fuel Cost Estimate', 'fuel_cost_estimate'], ['Toll Fee', 'toll_fee'], ['Estimated Time', 'estimated_time']] },
+  Settings:  { table: 'settings',  order: 'setting_name.asc',               cols: [['Setting Name', 'setting_name'], ['Value', 'value']] }
+};
 
-    sheet = ss.getSheetByName(SHEETS.HELPERS);
-    if (!sheet) {
-      sheet = ss.insertSheet(SHEETS.HELPERS);
-      sheet.appendRow(['Helper ID', 'Helper Name', 'Contact Number', 'Address', 'Default Rate', 'Status', 'Date Added']);
-      sheet.getRange('A1:G1').setFontWeight('bold').setBackground('#1565c0').setFontColor('#ffffff');
-    }
+const PAGE_SIZE_ = 1000;
 
-    sheet = ss.getSheetByName(SHEETS.TRUCKS);
-    if (!sheet) {
-      sheet = ss.insertSheet(SHEETS.TRUCKS);
-      sheet.appendRow(['Truck ID', 'Plate Number', 'Model/Type', 'Status', 'Date Added']);
-      sheet.getRange('A1:E1').setFontWeight('bold').setBackground('#1565c0').setFontColor('#ffffff');
-    }
-    
-    sheet = ss.getSheetByName(SHEETS.TRIPS);
-    if (!sheet) {
-      sheet = ss.insertSheet(SHEETS.TRIPS);
-      sheet.appendRow(['Trip ID', 'Date', 'Driver ID', 'Driver Name', 'Customer Name', 'Origin', 'Destination', 'Distance', 'Cargo Type', 'Weight', 'Trip Rate', 'Fuel Cost', 'Toll Fee', 'Meal Allowance', 'Other Expenses', 'Total Expenses', 'Gross Income', 'Net Profit', 'Payment Status', 'Trip Status', 'Notes', 'Trucks Data', 'Helpers Data', 'Driver Pay', 'Customer Subsidy', 'VAT Status']);
-      sheet.getRange('A1:Z1').setFontWeight('bold').setBackground('#1565c0').setFontColor('#ffffff');
-    }
-    
-    sheet = ss.getSheetByName(SHEETS.CUSTOMERS);
-    if (!sheet) {
-      sheet = ss.insertSheet(SHEETS.CUSTOMERS);
-      sheet.appendRow(['Customer ID', 'Customer Name', 'Company Name', 'Contact Number', 'Email', 'Address', 'Credit Limit', 'Current Balance', 'Payment Terms', 'Status', 'Date Added']);
-      sheet.getRange('A1:K1').setFontWeight('bold').setBackground('#1565c0').setFontColor('#ffffff');
-    }
-    
-    sheet = ss.getSheetByName(SHEETS.EXPENSES);
-    if (!sheet) {
-      sheet = ss.insertSheet(SHEETS.EXPENSES);
-      sheet.appendRow(['Expense ID', 'Date', 'Category', 'Description', 'Amount', 'Paid By', 'Payment Method', 'Receipt Number', 'Notes']);
-      sheet.getRange('A1:I1').setFontWeight('bold').setBackground('#1565c0').setFontColor('#ffffff');
-    }
-    
-    sheet = ss.getSheetByName(SHEETS.PAYMENTS);
-    if (!sheet) {
-      sheet = ss.insertSheet(SHEETS.PAYMENTS);
-      sheet.appendRow(['Payment ID', 'Customer ID', 'Customer Name', 'Payment Date', 'Amount', 'Payment Method', 'Reference Number', 'Notes', 'Timestamp']);
-      sheet.getRange('A1:I1').setFontWeight('bold').setBackground('#1565c0').setFontColor('#ffffff');
-    }
-    
-    sheet = ss.getSheetByName(SHEETS.ROUTES);
-    if (!sheet) {
-      sheet = ss.insertSheet(SHEETS.ROUTES);
-      sheet.appendRow(['Route ID', 'Origin', 'Destination', 'Distance', 'Base Rate', 'Fuel Cost Estimate', 'Toll Fee', 'Estimated Time']);
-      sheet.getRange('A1:H1').setFontWeight('bold').setBackground('#1565c0').setFontColor('#ffffff');
-    }
-    
-    sheet = ss.getSheetByName(SHEETS.SETTINGS);
-    if (!sheet) {
-      sheet = ss.insertSheet(SHEETS.SETTINGS);
-      sheet.appendRow(['Setting Name', 'Value']);
-      sheet.getRange('A1:B1').setFontWeight('bold').setBackground('#1565c0').setFontColor('#ffffff');
-      sheet.appendRow(['Company Name', 'Reyna Trucking Business']);
-      sheet.appendRow(['Company Address', '']);
-      sheet.appendRow(['Company TIN', '']);
-      sheet.appendRow(['Base Rate per km', '50']);
-      sheet.appendRow(['Fuel Price per Liter', '60']);
-      sheet.appendRow(['Average Fuel Consumption (km/L)', '10']);
-    }
-    
-    return { success: true, message: 'Sheets initialized successfully' };
-  } catch (error) {
-    return { success: false, error: error.toString() };
-  }
+function toLegacy_(cfg, row) {
+  const o = {};
+  cfg.cols.forEach(function (c) {
+    let v = row[c[1]];
+    if (c[2] === 'json') v = (v === null || v === undefined) ? '' : (typeof v === 'string' ? v : JSON.stringify(v));
+    else if (v === null || v === undefined) v = '';
+    else if (typeof v === 'string') v = v.trim();
+    o[c[0]] = v;
+  });
+  return o;
 }
 
+function tableQuery_(cfg, offset, filter) {
+  return cfg.table + '?select=*&order=' + cfg.order + (filter ? '&' + filter : '') + '&limit=' + PAGE_SIZE_ + '&offset=' + offset;
+}
+
+/** All rows of a table (paged, 1000 at a time), starting at startOffset. */
+function fetchRaw_(cfg, startOffset, filter) {
+  let all = [];
+  let offset = startOffset;
+  while (true) {
+    const rows = dbRequest_('get', tableQuery_(cfg, offset, filter)) || [];
+    all = all.concat(rows);
+    if (rows.length < PAGE_SIZE_) break;
+    offset += PAGE_SIZE_;
+  }
+  return all;
+}
+
+/** Rows of one table, optionally filtered (a PostgREST filter such as "trip_id=eq.TRP00001"). */
+function getTableData_(name, filter) {
+  const cfg = TABLES_[name];
+  if (!cfg) return [];
+  return fetchRaw_(cfg, 0, filter).map(function (r) { return toLegacy_(cfg, r); });
+}
+
+/** Loads several tables at the same time (one round trip instead of one per table). */
+function loadTables_(names) {
+  const c = dbConfig_();
+  const headers = { apikey: c.key, Authorization: 'Bearer ' + c.key };
+  const requests = names.map(function (n) {
+    return { url: c.url + '/rest/v1/' + tableQuery_(TABLES_[n], 0, ''), method: 'get', headers: headers, muteHttpExceptions: true };
+  });
+  const responses = UrlFetchApp.fetchAll(requests);
+  const out = {};
+  responses.forEach(function (res, i) {
+    const code = res.getResponseCode();
+    if (code < 200 || code >= 300) throw new Error('Database error ' + code + ': ' + String(res.getContentText()).slice(0, 200));
+    const cfg = TABLES_[names[i]];
+    let rows = JSON.parse(res.getContentText() || '[]');
+    if (rows.length >= PAGE_SIZE_) rows = rows.concat(fetchRaw_(cfg, PAGE_SIZE_, ''));
+    out[names[i]] = rows.map(function (r) { return toLegacy_(cfg, r); });
+  });
+  return out;
+}
+
+function dbInsert_(table, obj) {
+  const rows = dbRequest_('post', table, obj, { Prefer: 'return=representation' });
+  return rows && rows[0];
+}
+function dbUpdate_(table, filter, obj) {
+  return dbRequest_('patch', table + '?' + filter, obj, { Prefer: 'return=representation' }) || [];
+}
+function eq_(v) { return 'eq.' + encodeURIComponent(String(v)); }
+
+function num_(v) {
+  const n = parseFloat(String(v === undefined || v === null ? '' : v).replace(/[^0-9.-]/g, ''));
+  return isNaN(n) ? 0 : n;
+}
+function txt_(v) { return (v === undefined || v === null) ? '' : String(v).trim(); }
+function todayStr_() { return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd'); }
+function dateStr_(v) {
+  const s = txt_(v);
+  const m = /^(\d{4}-\d{2}-\d{2})/.exec(s);
+  if (m) return m[1];
+  const d = s ? new Date(s) : null;
+  return (d && !isNaN(d.getTime())) ? Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd') : todayStr_();
+}
+function dbFriendlyError_(err, what) {
+  const m = String(err);
+  if (/duplicate key|Database error 409/.test(m) && !/foreign key/.test(m)) return what + ' already exists.';
+  if (/foreign key/.test(m)) return 'A selected record no longer exists. Refresh the page and try again.';
+  return m;
+}
+
+function settingsFromRows_(rows) {
+  const settings = {};
+  rows.forEach(function (row) {
+    if (row['Setting Name'] && row['Value'] !== undefined && row['Value'] !== '') settings[row['Setting Name']] = row['Value'];
+  });
+  return settings;
+}
+
+function getSettingsData_() {
+  try { return settingsFromRows_(getTableData_(SHEETS.SETTINGS)); } catch (error) { return {}; }
+}
 
 function getDashboardData_(filterType, customStartDate, customEndDate) {
   try {
-    const ss = getSS_();
-    const requiredSheets = [SHEETS.DRIVERS, SHEETS.HELPERS, SHEETS.TRUCKS, SHEETS.TRIPS, SHEETS.CUSTOMERS, SHEETS.EXPENSES, SHEETS.PAYMENTS];
-    let missingSheets = [];
-    
-    for (let sheetName of requiredSheets) {
-      if (!ss.getSheetByName(sheetName)) missingSheets.push(sheetName);
-    }
-    if (missingSheets.length > 0) initializeSheets();
-    
     const dateRange = getDateRange_(filterType, customStartDate, customEndDate);
+    const t = loadTables_([SHEETS.DRIVERS, SHEETS.HELPERS, SHEETS.TRUCKS, SHEETS.TRIPS, SHEETS.CUSTOMERS,
+                           SHEETS.EXPENSES, SHEETS.ROUTES, SHEETS.PAYMENTS, SHEETS.SETTINGS]);
     const result = {
-      drivers: getSheetData_(SHEETS.DRIVERS),
-      helpers: getSheetData_(SHEETS.HELPERS),
-      trucks: getSheetData_(SHEETS.TRUCKS),
-      trips: getSheetData_(SHEETS.TRIPS).reverse(), 
-      customers: getSheetData_(SHEETS.CUSTOMERS),
-      expenses: getSheetData_(SHEETS.EXPENSES).reverse(),
-      routes: getSheetData_(SHEETS.ROUTES),
-      payments: getSheetData_(SHEETS.PAYMENTS).reverse(),
-      settings: getSettingsData_(),
+      drivers: t.Drivers,
+      helpers: t.Helpers,
+      trucks: t.Trucks,
+      trips: t.Trips.reverse(),
+      customers: t.Customers,
+      expenses: t.Expenses.reverse(),
+      routes: t.Routes,
+      payments: t.Payments.reverse(),
+      settings: settingsFromRows_(t.Settings),
       dateRange: dateRange
     };
-    
     result.analytics = calculateAnalytics_(result, dateRange);
     return JSON.parse(JSON.stringify(result));
-    
   } catch (error) {
     return JSON.parse(JSON.stringify({ error: error.toString() }));
   }
@@ -154,54 +177,12 @@ function getDateRange_(filterType, customStartDate, customEndDate) {
   return { startDate: startDate.toISOString(), endDate: endDate.toISOString(), filterType: filterType };
 }
 
-function getSheetData_(sheetName) {
-  try {
-    const ss = getSS_();
-    const sheet = ss.getSheetByName(sheetName);
-    if (!sheet) return [];
-    
-    const lastRow = sheet.getLastRow();
-    const lastCol = sheet.getLastColumn();
-    if (lastRow <= 1 || lastCol === 0) return [];
-    
-    const data = sheet.getRange(1, 1, lastRow, lastCol).getValues();
-    const headers = data[0].map(function (h, i) { return (h === '' && i === 0 && sheetName === SHEETS.PAYMENTS) ? 'Payment ID' : h; });
-    const rows = data.slice(1);
-    
-    return rows.filter(row => {
-      const firstCell = row[0];
-      return !(firstCell === null || firstCell === undefined || firstCell === '' || (typeof firstCell === 'string' && firstCell.trim() === ''));
-    }).map(row => {
-      const obj = {};
-      headers.forEach((header, index) => {
-        let value = row[index];
-        if (value instanceof Date) obj[header] = value;
-        else if (typeof value === 'number') obj[header] = value;
-        else if (typeof value === 'string') obj[header] = value.trim();
-        else obj[header] = '';
-      });
-      return obj;
-    });
-  } catch (error) { return []; }
-}
-
-function getSettingsData_() {
-  try {
-    const data = getSheetData_(SHEETS.SETTINGS);
-    const settings = {};
-    data.forEach(row => {
-      if (row['Setting Name'] && row['Value'] !== undefined && row['Value'] !== '') {
-        settings[row['Setting Name']] = row['Value'];
-      }
-    });
-    return settings;
-  } catch (error) { return {}; }
-}
-
 function parseDate_(dateValue) {
   if (!dateValue) return null;
   if (dateValue instanceof Date) return dateValue;
   if (typeof dateValue === 'string') {
+    const ymd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateValue.trim());
+    if (ymd) return new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]), 12, 0, 0);
     const parsed = new Date(dateValue);
     if (!isNaN(parsed.getTime())) return parsed;
   }
@@ -214,70 +195,92 @@ function parseDate_(dateValue) {
 
 function addTruck_(truckData) {
   try {
-    const sheet = getSS_().getSheetByName(SHEETS.TRUCKS);
-    const truckId = 'TRK' + String(sheet.getLastRow()).padStart(4, '0');
-    sheet.appendRow([truckId, truckData.plate, truckData.model || '', 'Active', new Date().toLocaleDateString()]);
-    return { success: true, truckId };
-  } catch (error) { return { success: false, error: error.toString() }; }
+    const plate = txt_(truckData && truckData.plate);
+    if (!plate) return { success: false, error: 'Plate number is required.' };
+    const row = dbInsert_('trucks', { plate_number: plate, model_type: txt_(truckData.model) });
+    return { success: true, truckId: row.truck_id };
+  } catch (error) { return { success: false, error: dbFriendlyError_(error, 'That plate number') }; }
 }
 
 function addHelper_(helperData) {
   try {
-    const sheet = getSS_().getSheetByName(SHEETS.HELPERS);
-    const helperId = 'HLP' + String(sheet.getLastRow()).padStart(4, '0');
-    sheet.appendRow([helperId, helperData.name, helperData.contact || '', helperData.address || '', helperData.rate || 0, 'Active', new Date().toLocaleDateString()]);
-    return { success: true, helperId };
-  } catch (error) { return { success: false, error: error.toString() }; }
+    const name = txt_(helperData && helperData.name);
+    if (!name) return { success: false, error: 'Helper name is required.' };
+    const row = dbInsert_('helpers', { helper_name: name, contact_number: txt_(helperData.contact), address: txt_(helperData.address), default_rate: num_(helperData.rate) });
+    return { success: true, helperId: row.helper_id };
+  } catch (error) { return { success: false, error: dbFriendlyError_(error, 'That helper') }; }
 }
 
 function addDriver_(driverData) {
   try {
-    const sheet = getSS_().getSheetByName(SHEETS.DRIVERS);
-    const driverId = 'DRV' + String(sheet.getLastRow()).padStart(5, '0');
-    sheet.appendRow([driverId, driverData.driverName, driverData.licenseNumber, driverData.contactNumber, driverData.address || '', driverData.driverRate, 'Active', new Date().toLocaleDateString()]);
-    return { success: true, driverId };
-  } catch (error) { return { success: false, error: error.toString() }; }
+    const name = txt_(driverData && driverData.driverName);
+    if (!name) return { success: false, error: 'Driver name is required.' };
+    const row = dbInsert_('drivers', { driver_name: name, license_number: txt_(driverData.licenseNumber), contact_number: txt_(driverData.contactNumber),
+      address: txt_(driverData.address), driver_rate: num_(driverData.driverRate) });
+    return { success: true, driverId: row.driver_id };
+  } catch (error) { return { success: false, error: dbFriendlyError_(error, 'That driver') }; }
 }
 
 function addCustomer_(customerData) {
   try {
-    const sheet = getSS_().getSheetByName(SHEETS.CUSTOMERS);
-    const customerId = 'CUST' + String(sheet.getLastRow()).padStart(5, '0');
-    sheet.appendRow([customerId, customerData.customerName, customerData.companyName || '', customerData.contactNumber, customerData.email || '', customerData.address || '', customerData.creditLimit || 0, 0, customerData.paymentTerms || 'COD', 'Active', new Date().toLocaleDateString()]);
-    return { success: true, customerId };
-  } catch (error) { return { success: false, error: error.toString() }; }
+    const name = txt_(customerData && customerData.customerName);
+    if (!name) return { success: false, error: 'Customer name is required.' };
+    const row = dbInsert_('customers', { customer_name: name, company_name: txt_(customerData.companyName), contact_number: txt_(customerData.contactNumber),
+      email: txt_(customerData.email), address: txt_(customerData.address), credit_limit: num_(customerData.creditLimit),
+      payment_terms: txt_(customerData.paymentTerms) || 'COD' });
+    return { success: true, customerId: row.customer_id };
+  } catch (error) { return { success: false, error: dbFriendlyError_(error, 'A customer with that name') }; }
 }
 
 function addExpense_(expenseData) {
   try {
-    const sheet = getSS_().getSheetByName(SHEETS.EXPENSES);
-    const expenseId = 'EXP' + String(sheet.getLastRow()).padStart(5, '0');
-    sheet.appendRow([expenseId, expenseData.date, expenseData.category, expenseData.description, expenseData.amount, expenseData.paidBy || '', expenseData.paymentMethod || 'Cash', expenseData.receiptNumber || '', expenseData.notes || '']);
-    return { success: true, expenseId };
-  } catch (error) { return { success: false, error: error.toString() }; }
+    const d = expenseData || {};
+    const row = dbInsert_('expenses', { expense_date: dateStr_(d.date), category: txt_(d.category), description: txt_(d.description), amount: Math.abs(num_(d.amount)),
+      paid_by: txt_(d.paidBy), payment_method: txt_(d.paymentMethod) || 'Cash', receipt_number: txt_(d.receiptNumber), notes: txt_(d.notes) });
+    return { success: true, expenseId: row.expense_id };
+  } catch (error) { return { success: false, error: dbFriendlyError_(error, 'This expense') }; }
 }
 
 function addPayment_(paymentData) {
   try {
-    const sheet = getSS_().getSheetByName(SHEETS.PAYMENTS);
-    const paymentId = 'PAY' + String(sheet.getLastRow()).padStart(5, '0');
-    sheet.appendRow([paymentId, paymentData.customerId, paymentData.customerName, paymentData.paymentDate, paymentData.amount, paymentData.paymentMethod, paymentData.referenceNumber || '', paymentData.notes || '', new Date().toLocaleString()]);
-    return { success: true, paymentId };
-  } catch (error) { return { success: false, error: error.toString() }; }
+    const d = paymentData || {};
+    if (!txt_(d.customerId)) return { success: false, error: 'Select a customer.' };
+    const row = dbInsert_('payments', { customer_id: txt_(d.customerId), customer_name: txt_(d.customerName), payment_date: dateStr_(d.paymentDate),
+      amount: Math.abs(num_(d.amount)), payment_method: txt_(d.paymentMethod) || 'Cash', reference_number: txt_(d.referenceNumber), notes: txt_(d.notes) });
+    return { success: true, paymentId: row.payment_id };
+  } catch (error) { return { success: false, error: dbFriendlyError_(error, 'This payment') }; }
 }
 
-// Sheet column header -> field name sent by the dashboard. Rows are built by HEADER NAME,
-// so the order of columns in the Trips sheet no longer matters.
-const TRIP_FIELDS_ = {
-  'Trip ID': 'tripId', 'Date': 'date', 'Driver ID': 'driverId', 'Driver Name': 'driverName', 'Customer Name': 'customerName',
-  'Origin': 'origin', 'Destination': 'destination', 'Distance': 'distance', 'Cargo Type': 'cargoType', 'Weight': 'weight',
-  'Trip Rate': 'tripRate', 'Fuel Cost': 'fuelCost', 'Toll Fee': 'tollFee', 'Meal Allowance': 'mealAllowance',
-  'Other Expenses': 'otherExpenses', 'Total Expenses': 'totalExpenses', 'Gross Income': 'grossIncome', 'Net Profit': 'netProfit',
-  'Payment Status': 'paymentStatus', 'Trip Status': 'tripStatus', 'Notes': 'notes', 'Trucks Data': 'trucksData',
-  'Helpers Data': 'helpersData', 'Driver Pay': 'driverPay', 'Customer Subsidy': 'customerSubsidy', 'VAT Status': 'vatStatus'
+// Field name sent by the dashboard -> database column of the trips table.
+const TRIP_DB_ = {
+  date: 'trip_date', driverId: 'driver_id', driverName: 'driver_name', customerName: 'customer_name', origin: 'origin', destination: 'destination',
+  distance: 'distance', cargoType: 'cargo_type', weight: 'weight', tripRate: 'trip_rate', fuelCost: 'fuel_cost', tollFee: 'toll_fee',
+  mealAllowance: 'meal_allowance', otherExpenses: 'other_expenses', totalExpenses: 'total_expenses', grossIncome: 'gross_income', netProfit: 'net_profit',
+  paymentStatus: 'payment_status', tripStatus: 'trip_status', notes: 'notes', trucksData: 'trucks_data', helpersData: 'helpers_data',
+  driverPay: 'driver_pay', customerSubsidy: 'customer_subsidy', vatStatus: 'vat_status'
 };
+const TRIP_NUMERIC_ = { distance: 1, weight: 1, tripRate: 1, fuelCost: 1, tollFee: 1, mealAllowance: 1, otherExpenses: 1, totalExpenses: 1,
+  grossIncome: 1, netProfit: 1, driverPay: 1, customerSubsidy: 1 };
 
-// Fills in Total Expenses / Net Profit when the dashboard did not send them.
+/** Cleans a trip from the dashboard into database columns. With onlyProvided, fields that were not sent are left out. */
+function tripToDb_(t, onlyProvided) {
+  const out = {};
+  Object.keys(TRIP_DB_).forEach(function (key) {
+    if (onlyProvided && t[key] === undefined) return;
+    let v = t[key];
+    if (key === 'date') v = dateStr_(v);
+    else if (TRIP_NUMERIC_[key]) v = num_(v);
+    else if (key === 'helpersData') {
+      try { v = (typeof v === 'string') ? JSON.parse(v || '[]') : (v || []); } catch (e) { v = []; }
+      if (!Array.isArray(v)) v = [];
+    }
+    else if (key === 'driverId') v = txt_(v) || null;
+    else v = txt_(v);
+    out[TRIP_DB_[key]] = v;
+  });
+  return out;
+}
+
 function normalizeTrip_(t) {
   const n = function (v) { return parseFloat(String(v === undefined || v === null ? 0 : v).replace(/[^0-9.-]/g, '')) || 0; };
   const hasCosts = t.fuelCost !== undefined || t.driverPay !== undefined;
@@ -293,50 +296,25 @@ function normalizeTrip_(t) {
 }
 
 function addTrip_(tripData) {
-  const lock = LockService.getScriptLock();
   try {
-    lock.waitLock(10000);
-    const sheet = getSS_().getSheetByName(SHEETS.TRIPS);
-    const headers = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), 1)).getValues()[0];
-    const t = normalizeTrip_(tripData);
-
+    const t = normalizeTrip_(tripData || {});
     const unavailable = findUnavailableResources_(t);
     if (unavailable.length) {
       return { success: false, error: 'Cannot create the trip. Not available: ' + unavailable.join(', ') + '. Change their status or pick someone else.' };
     }
-
-    // Next Trip ID = highest existing TRP number + 1
-    let max = 0;
-    const lastRow = sheet.getLastRow();
-    if (lastRow > 1) {
-      sheet.getRange(2, 1, lastRow - 1, 1).getValues().forEach(function (r) {
-        const m = /^TRP(\d+)$/.exec(String(r[0]));
-        if (m) max = Math.max(max, parseInt(m[1], 10));
-      });
-    }
-    const tripId = 'TRP' + String(max + 1).padStart(5, '0');
-    t.tripId = tripId;
     if (!t.paymentStatus) t.paymentStatus = 'Unpaid';
     if (!t.tripStatus) t.tripStatus = 'Completed';
-
-    const row = headers.map(function (h) {
-      const key = TRIP_FIELDS_[h];
-      const v = key ? t[key] : '';
-      return (v === undefined || v === null) ? '' : v;
-    });
-    sheet.appendRow(row);
-    return { success: true, tripId: tripId };
+    const row = dbInsert_('trips', tripToDb_(t, false));   // the database assigns the next Trip ID
+    return { success: true, tripId: row.trip_id };
   } catch (error) {
-    return { success: false, error: error.toString() };
-  } finally {
-    try { lock.releaseLock(); } catch (e) {}
+    return { success: false, error: dbFriendlyError_(error, 'This trip') };
   }
 }
 
 function calculateTripPricing_(origin, destination, distance, weight) {
   try {
     const settings = getSettingsData_();
-    const routes = getSheetData_(SHEETS.ROUTES);
+    const routes = getTableData_(SHEETS.ROUTES);
     const matchingRoute = routes.find(r => r['Origin'] === origin && r['Destination'] === destination);
     
     let baseRate = parseFloat(settings['Base Rate per km'] || 50) * parseFloat(distance || 0);
@@ -363,7 +341,7 @@ function calculateTripPricing_(origin, destination, distance, weight) {
 
 function generatePayrollInvoice_(employeeName, role, periodStart, periodEnd) {
   try {
-    const trips = getSheetData_(SHEETS.TRIPS);
+    const trips = getTableData_(SHEETS.TRIPS);
     const settings = getSettingsData_();
     const isHelper = (role === 'helper');
     let grossEarnings = 0;
@@ -430,15 +408,11 @@ function generatePayrollInvoiceHTML_(driver, trips, periodStart, periodEnd, gros
 
 function getTripInvoice_(tripId) {
   try {
-    const trips = getSheetData_(SHEETS.TRIPS);
-    const settings = getSettingsData_();
-    const customers = getSheetData_(SHEETS.CUSTOMERS);
-    
-    const trip = trips.find(t => t['Trip ID'] === tripId);
+    const trip = getTableData_(SHEETS.TRIPS, 'trip_id=' + eq_(tripId))[0];
     if (!trip) return { success: false, error: 'Trip not found' };
-    
+    const settings = getSettingsData_();
     // Safely grab customer or fallback to empty object if not found
-    const customer = customers.find(c => c['Customer Name'] === trip['Customer Name']) || {};
+    const customer = getTableData_(SHEETS.CUSTOMERS, 'customer_name=' + eq_(trip['Customer Name']))[0] || {};
     
     const payload = { 
       success: true, 
@@ -594,11 +568,10 @@ function calculateDriverPerformance_(trips) {
 
 function getCustomerStatement_(customerId) {
   try {
-    const trips = getSheetData_(SHEETS.TRIPS); const payments = getSheetData_(SHEETS.PAYMENTS); const customers = getSheetData_(SHEETS.CUSTOMERS);
-    const customer = customers.find(c => c['Customer ID'] === customerId);
+    const customer = getTableData_(SHEETS.CUSTOMERS, 'customer_id=' + eq_(customerId))[0];
     if (!customer) return { success: false, error: 'Customer not found' };
-    const customerTrips = trips.filter(trip => trip['Customer Name'] === customer['Customer Name']);
-    const customerPayments = payments.filter(payment => payment['Customer ID'] === customerId);
+    const customerTrips = getTableData_(SHEETS.TRIPS, 'customer_name=' + eq_(customer['Customer Name']));
+    const customerPayments = getTableData_(SHEETS.PAYMENTS, 'customer_id=' + eq_(customerId));
     
     const transactions = [];
     customerTrips.forEach(trip => { const d = parseDate_(trip['Date']); if(d) transactions.push({ date: d, type: 'Invoice', reference: trip['Trip ID'], description: `${trip['Origin']} → ${trip['Destination']}`, debit: parseFloat(String(trip['Gross Income']).replace(/[^0-9.-]/g, '')) || 0, credit: 0 }); });
@@ -715,32 +688,32 @@ function generatePaymentsReport_(data) {
     totalPayments: data.analytics.totalPaymentsReceived, paymentsByMethod: paymentsByMethod, totalTransactions: filteredPayments.length
   };
 }
-function updateTripInServer_(tripData) {
-  const lock = LockService.getScriptLock();
+/** Permanently deletes a trip. Admins only; the deletion is written to the activity log. */
+function deleteTripFromServer_(tripId) {
+  adminOnly_();
+  tripId = txt_(tripId);
+  if (!tripId) return { success: false, error: 'Trip ID is missing.' };
   try {
-    lock.waitLock(10000);
-    const sheet = getSS_().getSheetByName(SHEETS.TRIPS);
-    const values = sheet.getDataRange().getValues();
-    const headers = values[0];
-    const t = normalizeTrip_(tripData);
-
-    for (let i = 1; i < values.length; i++) {
-      if (String(values[i][0]) === String(t.tripId)) {
-        const row = values[i].slice();
-        headers.forEach(function (h, c) {
-          if (h === 'Trip ID') return;                 // never change the ID
-          const key = TRIP_FIELDS_[h];
-          if (key && t[key] !== undefined) row[c] = t[key];   // only fields that were sent
-        });
-        sheet.getRange(i + 1, 1, 1, row.length).setValues([row]);
-        return { success: true };
-      }
-    }
-    return { success: false, error: 'Trip ID ' + t.tripId + ' not found.' };
+    const rows = dbRequest_('delete', 'trips?trip_id=' + eq_(tripId), null, { Prefer: 'return=representation' }) || [];
+    if (!rows.length) return { success: false, error: 'Trip not found.' };
+    const t = rows[0];
+    dbLog_('trip_deleted', tripId, 'customer=' + t.customer_name + ', date=' + t.trip_date + ', gross=' + t.gross_income);
+    return { success: true };
   } catch (error) {
-    return { success: false, error: error.toString() };
-  } finally {
-    try { lock.releaseLock(); } catch (e) {}
+    return { success: false, error: String(error) };
+  }
+}
+
+function updateTripInServer_(tripData) {
+  try {
+    const t = normalizeTrip_(tripData || {});
+    if (!txt_(t.tripId)) return { success: false, error: 'Trip ID is missing.' };
+    const changes = tripToDb_(t, true);                     // only the fields that were sent
+    const rows = dbUpdate_('trips', 'trip_id=' + eq_(t.tripId), changes);
+    if (!rows.length) return { success: false, error: 'Trip ID ' + t.tripId + ' not found.' };
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: dbFriendlyError_(error, 'This trip') };
   }
 }
 
@@ -786,13 +759,14 @@ const API_WHITELIST_ = {
   getCustomerStatement: getCustomerStatement_,
   generateReports: generateReports_,
   updateResourceStatus: updateResourceStatus_,
+  deleteTripFromServer: deleteTripFromServer_,
   // user management (admins only — enforced again on the server in apiCall)
   listUsers: listUsers_,
   createUser: createUser_,
   setUserActive: setUserActive_,
   resetUserPassword: resetUserPassword_
 };
-const ADMIN_API_ = { listUsers: true, createUser: true, setUserActive: true, resetUserPassword: true };
+const ADMIN_API_ = { listUsers: true, createUser: true, setUserActive: true, resetUserPassword: true, deleteTripFromServer: true };
 let CURRENT_SESSION_ = null;   // the signed-in user for the request currently being handled
 
 /** Serves the login page (nothing else is reachable without signing in). */
@@ -1170,9 +1144,9 @@ function changePassword(token, currentPassword, newPassword) {
  * ===================================================================== */
 const PEOPLE_STATUSES_ = ['Active', 'Day Off', 'Unavailable', 'Resigned'];
 const RESOURCE_TYPES_ = {
-  drivers: { sheet: SHEETS.DRIVERS, idHeader: 'Driver ID', statuses: PEOPLE_STATUSES_ },
-  helpers: { sheet: SHEETS.HELPERS, idHeader: 'Helper ID', statuses: PEOPLE_STATUSES_ },
-  trucks:  { sheet: SHEETS.TRUCKS,  idHeader: 'Truck ID',  statuses: ['Active', 'Under Maintenance', 'Unavailable'] }
+  drivers: { table: 'drivers', idColumn: 'driver_id', statuses: PEOPLE_STATUSES_ },
+  helpers: { table: 'helpers', idColumn: 'helper_id', statuses: PEOPLE_STATUSES_ },
+  trucks:  { table: 'trucks',  idColumn: 'truck_id',  statuses: ['Active', 'Under Maintenance', 'Unavailable'] }
 };
 
 function isAvailableStatus_(status) {
@@ -1185,27 +1159,12 @@ function updateResourceStatus_(type, id, status) {
   if (!cfg) return { success: false, error: 'Unknown type.' };
   status = String(status || '').trim();
   if (cfg.statuses.indexOf(status) === -1) return { success: false, error: 'Invalid status.' };
-
-  const lock = LockService.getScriptLock();
   try {
-    lock.waitLock(10000);
-    const sheet = getSS_().getSheetByName(cfg.sheet);
-    const values = sheet.getDataRange().getValues();
-    const headers = values[0];
-    const idCol = headers.indexOf(cfg.idHeader);
-    const statusCol = headers.indexOf('Status');
-    if (idCol === -1 || statusCol === -1) return { success: false, error: 'The sheet is missing the "' + cfg.idHeader + '" or "Status" column.' };
-    for (let i = 1; i < values.length; i++) {
-      if (String(values[i][idCol]) === String(id)) {
-        sheet.getRange(i + 1, statusCol + 1).setValue(status);
-        return { success: true, status: status };
-      }
-    }
-    return { success: false, error: 'Record not found.' };
+    const rows = dbUpdate_(cfg.table, cfg.idColumn + '=' + eq_(id), { status: status });
+    if (!rows.length) return { success: false, error: 'Record not found.' };
+    return { success: true, status: status };
   } catch (error) {
-    return { success: false, error: error.toString() };
-  } finally {
-    try { lock.releaseLock(); } catch (e) {}
+    return { success: false, error: String(error) };
   }
 }
 
@@ -1214,12 +1173,12 @@ function findUnavailableResources_(t) {
   const bad = [];
   const driverId = String(t.driverId || '');
   if (driverId) {
-    const d = getSheetData_(SHEETS.DRIVERS).filter(function (r) { return String(r['Driver ID']) === driverId; })[0];
+    const d = getTableData_(SHEETS.DRIVERS).filter(function (r) { return String(r['Driver ID']) === driverId; })[0];
     if (d && !isAvailableStatus_(d['Status'])) bad.push(d['Driver Name'] + ' (' + d['Status'] + ')');
   }
   const plates = String(t.trucksData || '').split(',').map(function (p) { return p.trim(); }).filter(Boolean);
   if (plates.length) {
-    getSheetData_(SHEETS.TRUCKS).forEach(function (r) {
+    getTableData_(SHEETS.TRUCKS).forEach(function (r) {
       if (plates.indexOf(String(r['Plate Number'])) > -1 && !isAvailableStatus_(r['Status'])) bad.push(r['Plate Number'] + ' (' + r['Status'] + ')');
     });
   }
@@ -1227,7 +1186,7 @@ function findUnavailableResources_(t) {
   try { helpers = JSON.parse(t.helpersData || '[]'); } catch (e) {}
   const names = helpers.map(function (h) { return String(h && h.name || ''); }).filter(Boolean);
   if (names.length) {
-    getSheetData_(SHEETS.HELPERS).forEach(function (r) {
+    getTableData_(SHEETS.HELPERS).forEach(function (r) {
       if (names.indexOf(String(r['Helper Name'])) > -1 && !isAvailableStatus_(r['Status'])) bad.push(r['Helper Name'] + ' (' + r['Status'] + ')');
     });
   }

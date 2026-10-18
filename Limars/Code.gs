@@ -1,6 +1,6 @@
 /**
  * REYNA ADVANCED TRACKER FOR TRUCKING BUSINESS - ENHANCED VERSION
- * Complete Trucking Management System 
+ * Complete Trucking Management System
  * Google Apps Script backend  +  Postgres (Supabase) database
  */
 
@@ -23,7 +23,7 @@ const TABLES_ = {
   Helpers:   { table: 'helpers',   order: 'created_at.asc,helper_id.asc',   cols: [['Helper ID', 'helper_id'], ['Helper Name', 'helper_name'], ['Contact Number', 'contact_number'], ['Address', 'address'], ['Default Rate', 'default_rate'], ['Status', 'status'], ['Date Added', 'date_added']] },
   Trucks:    { table: 'trucks',    order: 'created_at.asc,truck_id.asc',    cols: [['Truck ID', 'truck_id'], ['Plate Number', 'plate_number'], ['Model/Type', 'model_type'], ['Status', 'status'], ['Date Added', 'date_added']] },
   Customers: { table: 'customers', order: 'created_at.asc,customer_id.asc', cols: [['Customer ID', 'customer_id'], ['Customer Name', 'customer_name'], ['Company Name', 'company_name'], ['Contact Number', 'contact_number'], ['Email', 'email'], ['Address', 'address'], ['Credit Limit', 'credit_limit'], ['Current Balance', 'current_balance'], ['Payment Terms', 'payment_terms'], ['Status', 'status'], ['Date Added', 'date_added']] },
-  Trips:     { table: 'trips',     order: 'created_at.asc,trip_id.asc',     cols: [['Trip ID', 'trip_id'], ['Date', 'trip_date'], ['Driver ID', 'driver_id'], ['Driver Name', 'driver_name'], ['Customer Name', 'customer_name'], ['Origin', 'origin'], ['Destination', 'destination'], ['Distance', 'distance'], ['Cargo Type', 'cargo_type'], ['Weight', 'weight'], ['Trip Rate', 'trip_rate'], ['Fuel Cost', 'fuel_cost'], ['Toll Fee', 'toll_fee'], ['Meal Allowance', 'meal_allowance'], ['Other Expenses', 'other_expenses'], ['Total Expenses', 'total_expenses'], ['Gross Income', 'gross_income'], ['Net Profit', 'net_profit'], ['Payment Status', 'payment_status'], ['Trip Status', 'trip_status'], ['Notes', 'notes'], ['Trucks Data', 'trucks_data'], ['Helpers Data', 'helpers_data', 'json'], ['Driver Pay', 'driver_pay'], ['Customer Subsidy', 'customer_subsidy'], ['VAT Status', 'vat_status']] },
+  Trips:     { table: 'trips',     order: 'created_at.asc,trip_id.asc',     cols: [['Trip ID', 'trip_id'], ['Date', 'trip_date'], ['Driver ID', 'driver_id'], ['Driver Name', 'driver_name'], ['Customer Name', 'customer_name'], ['Origin', 'origin'], ['Destination', 'destination'], ['Distance', 'distance'], ['Cargo Type', 'cargo_type'], ['Weight', 'weight'], ['Trip Rate', 'trip_rate'], ['Fuel Cost', 'fuel_cost'], ['Toll Fee', 'toll_fee'], ['Meal Allowance', 'meal_allowance'], ['Other Expenses', 'other_expenses'], ['Total Expenses', 'total_expenses'], ['Gross Income', 'gross_income'], ['Net Profit', 'net_profit'], ['Payment Status', 'payment_status'], ['Trip Status', 'trip_status'], ['Status Updated At', 'status_updated_at'], ['Status Updated By', 'status_updated_by'], ['Status Note', 'status_note'], ['Received By', 'received_by'], ['Delivered At', 'delivered_at'], ['POD Confirmed', 'pod_confirmed'], ['POD Photo Path', 'pod_photo_path'], ['POD Signature Path', 'pod_signature_path'], ['Notes', 'notes'], ['Trucks Data', 'trucks_data'], ['Helpers Data', 'helpers_data', 'json'], ['Driver Pay', 'driver_pay'], ['Customer Subsidy', 'customer_subsidy'], ['VAT Status', 'vat_status']] },
   Expenses:  { table: 'expenses',  order: 'created_at.asc,expense_id.asc',  cols: [['Expense ID', 'expense_id'], ['Date', 'expense_date'], ['Category', 'category'], ['Description', 'description'], ['Amount', 'amount'], ['Paid By', 'paid_by'], ['Payment Method', 'payment_method'], ['Receipt Number', 'receipt_number'], ['Notes', 'notes']] },
   Payments:  { table: 'payments',  order: 'created_at.asc,payment_id.asc',  cols: [['Payment ID', 'payment_id'], ['Customer ID', 'customer_id'], ['Customer Name', 'customer_name'], ['Payment Date', 'payment_date'], ['Amount', 'amount'], ['Payment Method', 'payment_method'], ['Reference Number', 'reference_number'], ['Notes', 'notes'], ['Timestamp', 'created_at']] },
   Routes:    { table: 'routes',    order: 'created_at.asc,route_id.asc',    cols: [['Route ID', 'route_id'], ['Origin', 'origin'], ['Destination', 'destination'], ['Distance', 'distance'], ['Base Rate', 'base_rate'], ['Fuel Cost Estimate', 'fuel_cost_estimate'], ['Toll Fee', 'toll_fee'], ['Estimated Time', 'estimated_time']] },
@@ -144,6 +144,7 @@ function getDashboardData_(filterType, customStartDate, customEndDate) {
       routes: t.Routes,
       payments: t.Payments.reverse(),
       settings: settingsFromRows_(t.Settings),
+      tripIncidents: dbRequest_('get', 'driver_incidents?select=id,trip_id,driver_id,category,details,reported_at,reported_by&order=reported_at.desc&limit=200') || [],
       dateRange: dateRange
     };
     result.analytics = calculateAnalytics_(result, dateRange);
@@ -153,11 +154,159 @@ function getDashboardData_(filterType, customStartDate, customEndDate) {
   }
 }
 
+function getDriverForSession_() {
+  if (!CURRENT_SESSION_ || CURRENT_SESSION_.r !== 'driver') throw new Error('Not allowed.');
+  const driverId = txt_(CURRENT_SESSION_.driverId);
+  if (!driverId) throw new Error('Your account is not linked to a driver record. Contact an administrator.');
+  const driver = getTableData_(SHEETS.DRIVERS, 'driver_id=' + eq_(driverId))[0];
+  if (!driver) throw new Error('Your linked driver record was not found. Contact an administrator.');
+  return driver;
+}
+
+function getDriverDashboardData_() {
+  const driver = getDriverForSession_();
+  expireStaleDriverLocations_('driver_id=' + eq_(driver['Driver ID']));
+  const locations = dbRequest_('get', 'driver_trip_locations?driver_id=' + eq_(driver['Driver ID']) +
+    '&select=trip_id,updated_at') || [];
+  const locationByTrip = {};
+  locations.forEach(function(location) { locationByTrip[location.trip_id] = location.updated_at; });
+  const userRows = dbRequest_('get', 'app_users?username=eq.' + encodeURIComponent(CURRENT_SESSION_.u) +
+    '&select=username,full_name,created_at,last_login&limit=1') || [];
+  const account = userRows[0] || {};
+  const trips = getTableData_(SHEETS.TRIPS, 'driver_id=' + eq_(driver['Driver ID'])).map(function(trip) {
+    return {
+      tripId: trip['Trip ID'],
+      date: trip['Date'],
+      origin: trip['Origin'],
+      destination: trip['Destination'],
+      cargoType: trip['Cargo Type'],
+      tripStatus: trip['Trip Status'] || 'Scheduled',
+      statusUpdatedAt: trip['Status Updated At'],
+      statusUpdatedBy: trip['Status Updated By'],
+      statusNote: trip['Status Note'],
+      receivedBy: trip['Received By'],
+      deliveredAt: trip['Delivered At'],
+      podConfirmed: trip['POD Confirmed'] === true || trip['POD Confirmed'] === 'true',
+      hasPodPhoto: !!trip['POD Photo Path'],
+      hasPodSignature: !!trip['POD Signature Path'],
+      locationSharingActive: !!locationByTrip[trip['Trip ID']],
+      locationUpdatedAt: locationByTrip[trip['Trip ID']] || ''
+    };
+  });
+  const incidents = dbRequest_('get', 'driver_incidents?driver_id=' + eq_(driver['Driver ID']) +
+    '&select=id,trip_id,category,details,reported_at,reported_by&order=reported_at.desc&limit=200') || [];
+  return {
+    driverName: driver['Driver Name'],
+    profile: {
+      username: account.username || CURRENT_SESSION_.u,
+      fullName: account.full_name || driver['Driver Name'],
+      driverId: driver['Driver ID'],
+      contactNumber: driver['Contact Number'],
+      address: driver.Address,
+      licenseNumber: driver['License Number'],
+      driverStatus: driver.Status,
+      accountCreatedAt: account.created_at,
+      lastLogin: account.last_login
+    },
+    trips: trips,
+    incidents: incidents
+  };
+}
+
+const DRIVER_LOCATION_STALE_MS_ = 2 * 60 * 1000;
+
+function expireStaleDriverLocations_(filter) {
+  const cutoff = new Date(Date.now() - DRIVER_LOCATION_STALE_MS_).toISOString();
+  const stale = dbRequest_('get', 'driver_trip_locations?select=trip_id&updated_at=lt.' +
+    encodeURIComponent(cutoff) + (filter ? '&' + filter : '')) || [];
+  stale.forEach(function(row) {
+    dbRequest_('delete', 'driver_trip_locations?trip_id=' + eq_(row.trip_id) +
+      '&updated_at=lt.' + encodeURIComponent(cutoff), null, { Prefer: 'return=minimal' });
+  });
+}
+
+function validateDriverLocation_(latitude, longitude, accuracy) {
+  if (typeof latitude !== 'number' || typeof longitude !== 'number' ||
+      !isFinite(latitude) || latitude < -90 || latitude > 90 ||
+      !isFinite(longitude) || longitude < -180 || longitude > 180 ||
+      (accuracy !== null && accuracy !== undefined &&
+        (typeof accuracy !== 'number' || !isFinite(accuracy) || accuracy < 0 || accuracy > 100000))) {
+    throw new Error('The device returned invalid location coordinates. Try again.');
+  }
+  return { latitude: latitude, longitude: longitude, accuracy: accuracy === undefined ? null : accuracy };
+}
+
+function getDriverLocationTrip_(tripId) {
+  if (!CURRENT_SESSION_ || CURRENT_SESSION_.r !== 'driver') throw new Error('Only drivers can share trip locations.');
+  tripId = txt_(tripId);
+  if (!tripId) throw new Error('Trip ID is missing.');
+  const trip = getTableData_(SHEETS.TRIPS, 'trip_id=' + eq_(tripId))[0];
+  if (!trip) throw new Error('Trip not found.');
+  assertDriverTripAccess_(trip, true);
+  if (['In Transit', 'Delayed'].indexOf(txt_(trip['Trip Status'])) === -1) {
+    throw new Error('Location sharing is available only while a trip is In Transit or Delayed.');
+  }
+  return { trip: trip, driver: getDriverForSession_() };
+}
+
+function startDriverLocationSharing_(tripId, latitude, longitude, accuracy) {
+  const location = validateDriverLocation_(latitude, longitude, accuracy);
+  const assignment = getDriverLocationTrip_(tripId);
+  const now = new Date().toISOString();
+  const result = dbRequest_('post', 'driver_trip_locations?on_conflict=trip_id', {
+    trip_id: txt_(tripId),
+    driver_id: assignment.driver['Driver ID'],
+    latitude: location.latitude,
+    longitude: location.longitude,
+    accuracy_m: location.accuracy,
+    updated_at: now
+  }, { Prefer: 'resolution=merge-duplicates,return=representation' });
+  if (!result || !result.length) throw new Error('The location could not be saved.');
+  return { success: true, updatedAt: now };
+}
+
+function updateDriverLocation_(tripId, latitude, longitude, accuracy) {
+  const location = validateDriverLocation_(latitude, longitude, accuracy);
+  const assignment = getDriverLocationTrip_(tripId);
+  const now = new Date().toISOString();
+  const rows = dbUpdate_('driver_trip_locations',
+    'trip_id=' + eq_(tripId) + '&driver_id=' + eq_(assignment.driver['Driver ID']), {
+      latitude: location.latitude,
+      longitude: location.longitude,
+      accuracy_m: location.accuracy,
+      updated_at: now
+    });
+  if (!rows.length) throw new Error('Location sharing is not active for this trip. Start sharing again.');
+  return { success: true, updatedAt: now };
+}
+
+function stopDriverLocationSharing_(tripId) {
+  if (!CURRENT_SESSION_ || CURRENT_SESSION_.r !== 'driver') throw new Error('Only drivers can stop location sharing.');
+  tripId = txt_(tripId);
+  if (!tripId) throw new Error('Trip ID is missing.');
+  const trip = getTableData_(SHEETS.TRIPS, 'trip_id=' + eq_(tripId))[0];
+  if (!trip) throw new Error('Trip not found.');
+  assertDriverTripAccess_(trip, false);
+  const driver = getDriverForSession_();
+  dbRequest_('delete', 'driver_trip_locations?trip_id=' + eq_(tripId) +
+    '&driver_id=' + eq_(driver['Driver ID']), null, { Prefer: 'return=minimal' });
+  return { success: true };
+}
+
+function getActiveDriverLocations_() {
+  if (!CURRENT_SESSION_ || (CURRENT_SESSION_.r !== 'admin' && CURRENT_SESSION_.r !== 'employee')) {
+    throw new Error('Only employees and administrators can view active driver locations.');
+  }
+  expireStaleDriverLocations_('');
+  return dbRequest_('get', 'driver_trip_locations?select=trip_id,driver_id,latitude,longitude,accuracy_m,updated_at,' +
+    'trips!inner(driver_name,origin,destination,trip_status)&trips.trip_status=in.%28%22In%20Transit%22%2CDelayed%29&order=updated_at.desc') || [];
+}
+
 function getDateRange_(filterType, customStartDate, customEndDate) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   let startDate, endDate;
-  
+
   switch(filterType) {
     case 'today':
       startDate = new Date(today); endDate = new Date(today); endDate.setHours(23, 59, 59, 999); break;
@@ -303,7 +452,7 @@ function addTrip_(tripData) {
       return { success: false, error: 'Cannot create the trip. Not available: ' + unavailable.join(', ') + '. Change their status or pick someone else.' };
     }
     if (!t.paymentStatus) t.paymentStatus = 'Unpaid';
-    if (!t.tripStatus) t.tripStatus = 'Completed';
+    t.tripStatus = 'Scheduled';
     const row = dbInsert_('trips', tripToDb_(t, false));   // the database assigns the next Trip ID
     return { success: true, tripId: row.trip_id };
   } catch (error) {
@@ -316,10 +465,10 @@ function calculateTripPricing_(origin, destination, distance, weight) {
     const settings = getSettingsData_();
     const routes = getTableData_(SHEETS.ROUTES);
     const matchingRoute = routes.find(r => r['Origin'] === origin && r['Destination'] === destination);
-    
+
     let baseRate = parseFloat(settings['Base Rate per km'] || 50) * parseFloat(distance || 0);
     let fuelCost = 0; let tollFee = 0;
-    
+
     if (matchingRoute) {
       baseRate = parseFloat(String(matchingRoute['Base Rate']).replace(/[^0-9.-]/g, '')) || baseRate;
       fuelCost = parseFloat(String(matchingRoute['Fuel Cost Estimate']).replace(/[^0-9.-]/g, '')) || 0;
@@ -329,12 +478,12 @@ function calculateTripPricing_(origin, destination, distance, weight) {
       const fuelConsumption = parseFloat(settings['Average Fuel Consumption (km/L)'] || 10);
       fuelCost = (parseFloat(distance || 0) / fuelConsumption) * fuelPrice;
     }
-    
+
     const weightAdjustment = baseRate * ((parseFloat(weight || 0) / 1000) * 0.1);
     const totalRate = baseRate + weightAdjustment;
     const estimatedExpenses = fuelCost + tollFee + 500;
     const suggestedPrice = totalRate + estimatedExpenses + (totalRate * 0.2);
-    
+
     return { baseRate: totalRate.toFixed(2), fuelCost: fuelCost.toFixed(2), tollFee: tollFee.toFixed(2), mealAllowance: 500, estimatedExpenses: estimatedExpenses.toFixed(2), suggestedPrice: suggestedPrice.toFixed(2), estimatedProfit: (suggestedPrice - estimatedExpenses).toFixed(2) };
   } catch (error) { return { baseRate: '0.00', fuelCost: '0.00', tollFee: '0.00', mealAllowance: 500, estimatedExpenses: '0.00', suggestedPrice: '0.00', estimatedProfit: '0.00' }; }
 }
@@ -345,14 +494,14 @@ function generatePayrollInvoice_(employeeName, role, periodStart, periodEnd) {
     const settings = getSettingsData_();
     const isHelper = (role === 'helper');
     let grossEarnings = 0;
-    
+
     const periodTrips = trips.filter(trip => {
       const tripDate = parseDate_(trip['Date']);
       if (!tripDate) return false;
       const start = new Date(periodStart); const end = new Date(periodEnd);
       end.setHours(23, 59, 59, 999);
       if (tripDate < start || tripDate > end) return false;
-      
+
       if (isHelper) {
         try {
           const helpers = JSON.parse(trip['Helpers Data'] || '[]');
@@ -365,10 +514,10 @@ function generatePayrollInvoice_(employeeName, role, periodStart, periodEnd) {
         return false;
       }
     });
-    
+
     periodTrips.forEach(trip => { grossEarnings += trip._tempPay || 0; });
     const mockDriver = { 'Driver Name': employeeName + (isHelper ? ' (Staff)' : ''), 'License Number': isHelper ? 'N/A' : 'See Records' };
-    
+
     return { success: true, html: generatePayrollInvoiceHTML_(mockDriver, periodTrips, periodStart, periodEnd, grossEarnings, settings) };
   } catch (error) { return { success: false, error: error.toString() }; }
 }
@@ -377,7 +526,7 @@ function generatePayrollInvoiceHTML_(driver, trips, periodStart, periodEnd, gros
   const companyName = settings['Company Name'] || 'Reyna Trucking Business';
   const companyAddress = settings['Company Address'] || '';
   let tripsHtml = '';
-  
+
   trips.forEach(trip => {
     tripsHtml += `<tr>
         <td style="color: #1565c0; border-bottom: 1px solid #eee; padding: 10px;">${parseDate_(trip['Date']).toLocaleDateString('en-PH')}</td>
@@ -385,7 +534,7 @@ function generatePayrollInvoiceHTML_(driver, trips, periodStart, periodEnd, gros
         <td style="color: #1565c0; font-weight: 600; border-bottom: 1px solid #eee; padding: 10px;">₱${(trip._tempPay || 0).toLocaleString('en-PH', {minimumFractionDigits: 2})}</td>
       </tr>`;
   });
-  
+
   return `
     <div style="font-family: Arial; padding: 20px;">
       <h2 style="text-align: center; color: #1565c0; border-bottom: 2px solid #1565c0; padding-bottom: 10px;">${companyName}</h2>
@@ -413,19 +562,19 @@ function getTripInvoice_(tripId) {
     const settings = getSettingsData_();
     // Safely grab customer or fallback to empty object if not found
     const customer = getTableData_(SHEETS.CUSTOMERS, 'customer_name=' + eq_(trip['Customer Name']))[0] || {};
-    
-    const payload = { 
-      success: true, 
-      trip: trip, 
-      customer: customer, 
-      settings: settings 
+
+    const payload = {
+      success: true,
+      trip: trip,
+      customer: customer,
+      settings: settings
     };
 
     // FIX: This safely sanitizes Google Date objects so they don't return 'null' to the frontend
     return JSON.parse(JSON.stringify(payload));
-    
-  } catch (error) { 
-    return { success: false, error: error.toString() }; 
+
+  } catch (error) {
+    return { success: false, error: error.toString() };
   }
 }
 
@@ -438,34 +587,34 @@ function calculateAnalytics_(data, dateRange) {
     const expenses = data.expenses || [];
     const customers = data.customers || [];
     const payments = data.payments || [];
-    
+
     const startDateObj = new Date(dateRange.startDate);
     const endDateObj = new Date(dateRange.endDate);
-    
+
     const filteredTrips = trips.filter(trip => { try { const d = parseDate_(trip['Date']); return d && d >= startDateObj && d <= endDateObj; } catch(e) { return false; } });
     const filteredExpenses = expenses.filter(exp => { try { const d = parseDate_(exp['Date']); return d && d >= startDateObj && d <= endDateObj; } catch(e) { return false; } });
     const filteredPayments = payments.filter(p => { try { const d = parseDate_(p['Payment Date']); return d && d >= startDateObj && d <= endDateObj; } catch(e) { return false; } });
-    
+
     // Revenue = Total Billed to Client (Rate + Subsidy)
     const totalRevenue = filteredTrips.reduce((sum, trip) => sum + (parseFloat(String(trip['Gross Income']).replace(/[^0-9.-]/g, '')) || 0), 0);
-    
+
     // Direct Costs / Cost of Services (Fuel, Tolls, Meals, Driver Pay, Helper Pay per trip)
     const costOfServices = filteredTrips.reduce((sum, trip) => sum + (parseFloat(String(trip['Total Expenses']).replace(/[^0-9.-]/g, '')) || 0), 0);
-    
+
     // Gross Profit = Revenue - Cost of Services
     const grossProfit = totalRevenue - costOfServices;
-    
+
     // Operating Expenses = General Office/Maintenance Overhead (From the Expenses Tab)
     const operatingExpenses = filteredExpenses.reduce((sum, exp) => sum + (parseFloat(String(exp['Amount']).replace(/[^0-9.-]/g, '')) || 0), 0);
-    
+
     // Net Profit = Gross Profit - Operating Expenses
     const totalNetProfit = grossProfit - operatingExpenses;
-    
+
     const totalTrips = filteredTrips.length;
     const totalPaymentsReceived = filteredPayments.reduce((sum, p) => sum + (parseFloat(String(p['Amount']).replace(/[^0-9.-]/g, '')) || 0), 0);
-    
+
     const accountReceivables = calculateAccountReceivables_(customers, trips, payments);
-    
+
     return {
       totalRevenue, costOfServices, grossProfit, operatingExpenses, totalNetProfit, totalTrips, totalPaymentsReceived,
       grossMargin: totalRevenue > 0 ? ((grossProfit / totalRevenue) * 100).toFixed(2) : 0,
@@ -534,10 +683,10 @@ function calculateTrends_(trips, expenses, filterType) {
     }
     const periodTrips = trips.filter(trip => { try { const d = parseDate_(trip['Date']); return d && d >= periodStart && d <= periodEnd; } catch (e) { return false; } });
     const periodExpenses = expenses.filter(exp => { try { const d = parseDate_(exp['Date']); return d && d >= periodStart && d <= periodEnd; } catch (e) { return false; } });
-    
+
     const revenue = periodTrips.reduce((sum, trip) => sum + (parseFloat(String(trip['Gross Income']).replace(/[^0-9.-]/g, '')) || 0), 0);
     const expenseTotal = periodExpenses.reduce((sum, exp) => sum + (parseFloat(String(exp['Amount']).replace(/[^0-9.-]/g, '')) || 0), 0);
-    
+
     trends.push({ period: label, revenue, expenses: expenseTotal, profit: revenue - expenseTotal, trips: periodTrips.length });
   }
   return trends;
@@ -572,7 +721,7 @@ function getCustomerStatement_(customerId) {
     if (!customer) return { success: false, error: 'Customer not found' };
     const customerTrips = getTableData_(SHEETS.TRIPS, 'customer_name=' + eq_(customer['Customer Name']));
     const customerPayments = getTableData_(SHEETS.PAYMENTS, 'customer_id=' + eq_(customerId));
-    
+
     const transactions = [];
     customerTrips.forEach(trip => { const d = parseDate_(trip['Date']); if(d) transactions.push({ date: d, type: 'Invoice', reference: trip['Trip ID'], description: `${trip['Origin']} → ${trip['Destination']}`, debit: parseFloat(String(trip['Gross Income']).replace(/[^0-9.-]/g, '')) || 0, credit: 0 }); });
     customerPayments.forEach(payment => { const d = parseDate_(payment['Payment Date']); if(d) transactions.push({ date: d, type: 'Payment', reference: payment['Payment ID'], description: payment['Notes'] || 'Payment received', debit: 0, credit: parseFloat(String(payment['Amount']).replace(/[^0-9.-]/g, '')) || 0 }); });
@@ -708,15 +857,320 @@ function updateTripInServer_(tripData) {
   try {
     const t = normalizeTrip_(tripData || {});
     if (!txt_(t.tripId)) return { success: false, error: 'Trip ID is missing.' };
+    const existingTrip = getTableData_(SHEETS.TRIPS, 'trip_id=' + eq_(t.tripId))[0];
+    if (!existingTrip) return { success: false, error: 'Trip ID ' + t.tripId + ' not found.' };
+    delete t.tripStatus;
+    delete t.statusUpdatedAt;
+    delete t.statusUpdatedBy;
+    delete t.statusNote;
+    delete t.receivedBy;
+    delete t.deliveredAt;
     const changes = tripToDb_(t, true);                     // only the fields that were sent
     const rows = dbUpdate_('trips', 'trip_id=' + eq_(t.tripId), changes);
     if (!rows.length) return { success: false, error: 'Trip ID ' + t.tripId + ' not found.' };
-    return { success: true };
+    let warning = '';
+    if (txt_(existingTrip['Driver ID']) !== txt_(t.driverId)) {
+      try {
+        dbRequest_('delete', 'driver_trip_locations?trip_id=' + eq_(t.tripId), null, { Prefer: 'return=minimal' });
+      } catch (locationError) {
+        warning = 'Trip was reassigned, but the previous live location could not be cleared.';
+        console.error('Reassigned trip location cleanup failed: ' + locationError);
+      }
+    }
+    return { success: true, warning: warning };
   } catch (error) {
     return { success: false, error: dbFriendlyError_(error, 'This trip') };
   }
 }
 
+const TRIP_STATUSES_ = ['Scheduled', 'Loading', 'In Transit', 'Delayed', 'Delivered'];
+
+function updateAssignedTripStatus_(tripId, status, note, receivedBy, proof) {
+  const session = CURRENT_SESSION_;
+  tripId = txt_(tripId);
+  status = txt_(status);
+  note = txt_(note).slice(0, 500);
+  receivedBy = txt_(receivedBy).slice(0, 100);
+  proof = proof || {};
+  if (!session) throw new Error('Not allowed.');
+  if (!tripId) return { success: false, error: 'Trip ID is missing.' };
+  if (TRIP_STATUSES_.indexOf(status) === -1) return { success: false, error: 'Invalid trip status.' };
+  if (status === 'Delayed' && !note) return { success: false, error: 'Add a note explaining the delay.' };
+  if (status === 'Delivered' && proof.confirmed !== true) return { success: false, error: 'Confirm that the delivery was completed.' };
+  if (status === 'Delivered' && !receivedBy && !txt_(proof.signatureData)) {
+    return { success: false, error: 'Enter the receiver name or capture their signature.' };
+  }
+
+  let photoPath = '';
+  let signaturePath = '';
+  try {
+    const trip = getTableData_(SHEETS.TRIPS, 'trip_id=' + eq_(tripId))[0];
+    if (!trip) return { success: false, error: 'Trip not found.' };
+    assertDriverTripAccess_(trip, true);
+
+    const now = new Date().toISOString();
+    if (status === 'Delivered') {
+      if (proof.photo && proof.photo.data) photoPath = storeDriverProofFile_(tripId, proof.photo, 'photo');
+      if (proof.signatureData) {
+        signaturePath = storeDriverProofFile_(tripId, {
+          mimeType: 'image/png',
+          data: String(proof.signatureData).replace(/^data:image\/png;base64,/, '')
+        }, 'signature');
+      }
+    }
+    const change = {
+      trip_status: status,
+      status_updated_at: now,
+      status_updated_by: session.u,
+      status_note: note,
+      received_by: status === 'Delivered' ? (receivedBy || 'Signature on file') : '',
+      delivered_at: status === 'Delivered' ? now : null
+    };
+    if (status === 'Delivered') {
+      change.pod_confirmed = true;
+      if (photoPath) change.pod_photo_path = photoPath;
+      if (signaturePath) change.pod_signature_path = signaturePath;
+    }
+    const rows = dbUpdate_('trips', 'trip_id=' + eq_(tripId), change);
+    if (!rows.length) {
+      removeDriverProofFile_(photoPath);
+      removeDriverProofFile_(signaturePath);
+      return { success: false, error: 'Trip not found.' };
+    }
+
+    let locationWarning = '';
+    if (status !== 'In Transit' && status !== 'Delayed') {
+      try {
+        dbRequest_('delete', 'driver_trip_locations?trip_id=' + eq_(tripId), null, { Prefer: 'return=minimal' });
+      } catch (locationError) {
+        locationWarning = 'Trip status was saved, but the live location could not be cleared.';
+        console.error('Inactive trip location cleanup failed: ' + locationError);
+      }
+    }
+    try {
+      dbRequest_('post', 'trip_events', {
+        trip_id: tripId,
+        at: now,
+        status: status,
+        note: note,
+        received_by: status === 'Delivered' ? (receivedBy || 'Signature on file') : '',
+        changed_by: session.u,
+        changed_by_role: session.r
+      }, { Prefer: 'return=minimal' });
+    } catch (eventError) {
+      return {
+        success: true,
+        status: status,
+        deliveredAt: status === 'Delivered' ? now : null,
+        warning: 'Trip status was saved, but its history record could not be saved.' +
+          (locationWarning ? ' ' + locationWarning : '')
+      };
+    }
+    dbLog_('trip_status_updated', tripId, txt_(trip['Trip Status']) + ' -> ' + status);
+    return {
+      success: true,
+      status: status,
+      deliveredAt: status === 'Delivered' ? now : null,
+      warning: locationWarning
+    };
+  } catch (error) {
+    removeDriverProofFile_(photoPath);
+    removeDriverProofFile_(signaturePath);
+    return { success: false, error: String(error) };
+  }
+}
+
+function assertDriverTripAccess_(trip, requireUpdater) {
+  if (!CURRENT_SESSION_) throw new Error('Not allowed.');
+  if (CURRENT_SESSION_.r === 'driver') {
+    const driver = getDriverForSession_();
+    if (txt_(trip['Driver ID']) !== txt_(driver['Driver ID'])) {
+      throw new Error('You can only access trips assigned to your driver account.');
+    }
+    return;
+  }
+  if (requireUpdater && CURRENT_SESSION_.r !== 'admin') {
+    throw new Error('Only the assigned driver or an administrator can update trip status.');
+  }
+}
+
+function storeDriverProofFile_(tripId, file, kind) {
+  const mimeType = txt_(file && file.mimeType).toLowerCase();
+  const data = txt_(file && file.data).replace(/^data:image\/[a-z0-9.+-]+;base64,/, '');
+  const allowed = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+  const maxBytes = kind === 'signature' ? 512 * 1024 : 4 * 1024 * 1024;
+  if (!allowed[mimeType]) throw new Error('Proof files must be JPEG, PNG, or WebP images.');
+  if (!data || data.length > Math.ceil(maxBytes * 4 / 3) + 8) throw new Error('The ' + kind + ' image exceeds the allowed size.');
+  const bytes = Utilities.base64Decode(data);
+  if (!bytes.length || bytes.length > maxBytes) throw new Error('The ' + kind + ' image exceeds the allowed size.');
+  const header = bytes.slice(0, 12).map(function(byte) { return (byte + 256) % 256; });
+  const valid = mimeType === 'image/png' ? header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4e && header[3] === 0x47 :
+    mimeType === 'image/jpeg' ? header[0] === 0xff && header[1] === 0xd8 && header[2] === 0xff :
+    header[0] === 0x52 && header[1] === 0x49 && header[2] === 0x46 && header[3] === 0x46 &&
+      header[8] === 0x57 && header[9] === 0x45 && header[10] === 0x42 && header[11] === 0x50;
+  if (!valid) throw new Error('The uploaded file does not match its image type.');
+
+  const safeTripId = tripId.replace(/[^A-Za-z0-9._-]/g, '_');
+  const path = safeTripId + '/' + kind + '-' + new Date().getTime() + '-' +
+    Utilities.getUuid().replace(/-/g, '') + '.' + allowed[mimeType];
+  const c = dbConfig_();
+  const response = UrlFetchApp.fetch(c.url + '/storage/v1/object/delivery-proofs/' +
+    path.split('/').map(encodeURIComponent).join('/'), {
+      method: 'post',
+      contentType: mimeType,
+      payload: bytes,
+      headers: { apikey: c.key, Authorization: 'Bearer ' + c.key, 'x-upsert': 'false' },
+      muteHttpExceptions: true
+    });
+  const code = response.getResponseCode();
+  if (code < 200 || code >= 300) {
+    throw new Error('Could not save the delivery proof image (storage error ' + code + '). Check the delivery-proofs bucket setup.');
+  }
+  return path;
+}
+
+function createDriverProofUrl_(path) {
+  const c = dbConfig_();
+  const encodedPath = String(path).split('/').map(encodeURIComponent).join('/');
+  const response = UrlFetchApp.fetch(c.url + '/storage/v1/object/sign/delivery-proofs/' + encodedPath, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify({ expiresIn: 3600 }),
+    headers: { apikey: c.key, Authorization: 'Bearer ' + c.key },
+    muteHttpExceptions: true
+  });
+  const code = response.getResponseCode();
+  const text = response.getContentText();
+  if (code < 200 || code >= 300) throw new Error('Could not open the private delivery proof image (storage error ' + code + ').');
+  const result = JSON.parse(text || '{}');
+  const signedPath = String(result.signedURL || '');
+  if (!signedPath) throw new Error('Storage did not return a delivery proof link.');
+  return signedPath.indexOf('http') === 0 ? signedPath :
+    c.url + (signedPath.indexOf('/storage/v1/') === 0 ? signedPath : '/storage/v1' + (signedPath.charAt(0) === '/' ? signedPath : '/' + signedPath));
+}
+
+function removeDriverProofFile_(path) {
+  if (!path) return;
+  try {
+    const c = dbConfig_();
+    const response = UrlFetchApp.fetch(c.url + '/storage/v1/object/delivery-proofs', {
+      method: 'delete',
+      contentType: 'application/json',
+      payload: JSON.stringify({ prefixes: [path] }),
+      headers: { apikey: c.key, Authorization: 'Bearer ' + c.key },
+      muteHttpExceptions: true
+    });
+    if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) {
+      console.error('Could not remove unused delivery proof file: storage error ' + response.getResponseCode());
+    }
+  } catch (error) {
+    console.error('Could not remove unused delivery proof file: ' + error);
+  }
+}
+
+function getDriverTripProof_(tripId) {
+  tripId = txt_(tripId);
+  if (!tripId) return { success: false, error: 'Trip ID is missing.' };
+  const trip = getTableData_(SHEETS.TRIPS, 'trip_id=' + eq_(tripId))[0];
+  if (!trip) return { success: false, error: 'Trip not found.' };
+  assertDriverTripAccess_(trip, false);
+  try {
+    return {
+      success: true,
+      photoUrl: trip['POD Photo Path'] ? createDriverProofUrl_(trip['POD Photo Path']) : '',
+      signatureUrl: trip['POD Signature Path'] ? createDriverProofUrl_(trip['POD Signature Path']) : ''
+    };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+const DRIVER_INCIDENT_TYPES_ = [
+  'Traffic or road closures',
+  'Truck breakdown',
+  'Accident or emergency',
+  'Incorrect delivery information',
+  'Delayed loading or unloading'
+];
+
+function reportDriverIncident_(tripId, category, details) {
+  if (!CURRENT_SESSION_ || CURRENT_SESSION_.r !== 'driver') throw new Error('Only drivers can report trip incidents.');
+  tripId = txt_(tripId);
+  category = txt_(category);
+  details = txt_(details).slice(0, 1000);
+  if (!tripId) return { success: false, error: 'Select an assigned trip.' };
+  if (DRIVER_INCIDENT_TYPES_.indexOf(category) === -1) return { success: false, error: 'Select a valid incident type.' };
+  if (details.length < 5) return { success: false, error: 'Describe the problem (at least 5 characters).' };
+  try {
+    const driver = getDriverForSession_();
+    const trip = getTableData_(SHEETS.TRIPS, 'trip_id=' + eq_(tripId))[0];
+    if (!trip || txt_(trip['Driver ID']) !== txt_(driver['Driver ID'])) {
+      return { success: false, error: 'You can only report problems for trips assigned to your account.' };
+    }
+    if (trip['Trip Status'] === 'Delivered') return { success: false, error: 'A delivered trip cannot receive a new incident report.' };
+
+    const now = new Date().toISOString();
+    const summary = '[' + category + '] ' + details;
+    const incident = dbInsert_('driver_incidents', {
+      trip_id: tripId,
+      driver_id: driver['Driver ID'],
+      category: category,
+      details: details,
+      reported_at: now,
+      reported_by: CURRENT_SESSION_.u,
+      reported_by_role: CURRENT_SESSION_.r
+    });
+    dbLog_('driver_incident_reported', tripId, category);
+    let changed;
+    try {
+      changed = dbUpdate_('trips', 'trip_id=' + eq_(tripId), {
+        trip_status: 'Delayed',
+        status_updated_at: now,
+        status_updated_by: CURRENT_SESSION_.u,
+        status_note: summary
+      });
+    } catch (statusError) {
+      return {
+        success: true,
+        incidentId: incident && incident.id,
+        warning: 'Incident recorded, but the trip could not be marked Delayed: ' + String(statusError)
+      };
+    }
+    if (!changed.length) return { success: true, warning: 'Incident recorded, but the trip status could not be updated.' };
+    try {
+      dbRequest_('post', 'trip_events', {
+        trip_id: tripId,
+        at: now,
+        status: 'Delayed',
+        note: summary,
+        received_by: '',
+        changed_by: CURRENT_SESSION_.u,
+        changed_by_role: CURRENT_SESSION_.r
+      }, { Prefer: 'return=minimal' });
+    } catch (eventError) {
+      return { success: true, incidentId: incident && incident.id, warning: 'Incident recorded and trip marked Delayed, but status history could not be saved.' };
+    }
+    return { success: true, incidentId: incident && incident.id };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
+
+function getTripStatusHistory_(tripId) {
+  if (!CURRENT_SESSION_) throw new Error('Not allowed.');
+  tripId = txt_(tripId);
+  if (!tripId) return { success: false, error: 'Trip ID is missing.' };
+  try {
+    const trip = getTableData_(SHEETS.TRIPS, 'trip_id=' + eq_(tripId))[0];
+    if (!trip) return { success: false, error: 'Trip not found.' };
+    assertDriverTripAccess_(trip, false);
+    const events = dbRequest_('get', 'trip_events?trip_id=' + eq_(tripId) +
+      '&select=at,status,note,received_by,changed_by,changed_by_role&order=at.desc&limit=100') || [];
+    return { success: true, events: events };
+  } catch (error) {
+    return { success: false, error: String(error) };
+  }
+}
 
 /* =====================================================================
  * LOGIN & SESSION SECURITY
@@ -745,6 +1199,10 @@ const AUTH = {
 // The ONLY functions the signed-in browser may run (called through apiCall).
 const API_WHITELIST_ = {
   getDashboardData: getDashboardData_,
+  getDriverDashboardData: getDriverDashboardData_,
+  getActiveDriverLocations: getActiveDriverLocations_,
+  getTripStatusHistory: getTripStatusHistory_,
+  getDriverTripProof: getDriverTripProof_,
   addTruck: addTruck_,
   addHelper: addHelper_,
   addDriver: addDriver_,
@@ -753,6 +1211,11 @@ const API_WHITELIST_ = {
   addPayment: addPayment_,
   addTrip: addTrip_,
   updateTripInServer: updateTripInServer_,
+  updateAssignedTripStatus: updateAssignedTripStatus_,
+  startDriverLocationSharing: startDriverLocationSharing_,
+  updateDriverLocation: updateDriverLocation_,
+  stopDriverLocationSharing: stopDriverLocationSharing_,
+  reportDriverIncident: reportDriverIncident_,
   calculateTripPricing: calculateTripPricing_,
   generatePayrollInvoice: generatePayrollInvoice_,
   getTripInvoice: getTripInvoice_,
@@ -815,7 +1278,7 @@ function login(username, password) {
   try { dbTouchLogin_(username); } catch (err) { console.error('last_login update failed: ' + err); }
   const token = (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, '');
   const now = Date.now();
-  const session = { u: username, r: user.role === 'admin' ? 'admin' : 'employee', n: user.full_name || '',
+  const session = { u: username, r: normalizeRole_(user.role), n: user.full_name || '', driverId: user.driver_id || '',
                     m: !!user.must_change_password, c: now, k: now };
   putSession_(token, session);
   return { success: true, token: token, mustChange: session.m };
@@ -827,7 +1290,7 @@ function getApp(token) {
   const html = HtmlService.createHtmlOutputFromFile('Index').getContent();
   const inject = '<script>window.__SESSION_TOKEN__=' + safeJson_(String(token)) +
     ';window.__APP_URL__=' + safeJson_(ScriptApp.getService().getUrl() || '') +
-    ';window.__USER__=' + safeJson_({ username: s.u, fullName: s.n, role: s.r }) + ';</script>';
+    ';window.__USER__=' + safeJson_({ username: s.u, fullName: s.n, role: s.r, driverId: s.driverId || '' }) + ';</script>';
   return html.replace('<head>', '<head>' + inject);
 }
 
@@ -837,11 +1300,22 @@ function apiCall(token, fnName, args) {
   if (!Object.prototype.hasOwnProperty.call(API_WHITELIST_, fnName)) {
     throw new Error('Unknown action.');
   }
+  if (s.r === 'driver' && fnName !== 'getDriverDashboardData' &&
+      fnName !== 'getTripStatusHistory' && fnName !== 'getDriverTripProof' &&
+      fnName !== 'updateAssignedTripStatus' && fnName !== 'reportDriverIncident' &&
+      fnName !== 'startDriverLocationSharing' && fnName !== 'updateDriverLocation' &&
+      fnName !== 'stopDriverLocationSharing') {
+    throw new Error('Not allowed.');
+  }
   if (ADMIN_API_[fnName] && s.r !== 'admin') throw new Error('Not allowed.');
   CURRENT_SESSION_ = s;
   const result = API_WHITELIST_[fnName].apply(null, args || []);
   // Date objects cannot be sent to the browser (the page would wait forever), so turn them into text.
   return result === undefined ? null : JSON.parse(JSON.stringify(result));
+}
+
+function normalizeRole_(role) {
+  return role === 'admin' || role === 'driver' ? role : 'employee';
 }
 
 function logout(token) {
@@ -868,8 +1342,9 @@ function requireSession_(token, allowPendingPasswordChange) {
     try {
       const user = dbGetUser_(s.u);
       if (!user || user.is_active === false) { cache.remove(key); throw new Error('AUTH_REQUIRED'); }
-      s.r = user.role === 'admin' ? 'admin' : 'employee';
+      s.r = normalizeRole_(user.role);
       s.n = user.full_name || '';
+      s.driverId = user.driver_id || '';
       s.m = !!user.must_change_password;
       s.k = Date.now();
     } catch (err) {
@@ -945,7 +1420,7 @@ function dbRequest_(method, path, body, extraHeaders) {
 
 function dbGetUser_(username) {
   const rows = dbRequest_('get', 'app_users?username=eq.' + encodeURIComponent(username) +
-    '&select=username,full_name,salt,password_hash,role,is_active,must_change_password&limit=1');
+    '&select=username,full_name,salt,password_hash,role,is_active,must_change_password,driver_id&limit=1');
   return (rows && rows[0]) || null;
 }
 
@@ -1038,7 +1513,7 @@ function countActiveAdmins_() {
 
 function listUsers_() {
   adminOnly_();
-  const rows = dbRequest_('get', 'app_users?select=username,full_name,role,is_active,must_change_password,last_login,created_at,created_by&order=created_at.asc') || [];
+  const rows = dbRequest_('get', 'app_users?select=username,full_name,role,driver_id,is_active,must_change_password,last_login,created_at,created_by&order=created_at.asc') || [];
   // Belt and braces: password data must never leave the server.
   return rows.map(function (u) { delete u.salt; delete u.password_hash; return u; });
 }
@@ -1046,23 +1521,36 @@ function listUsers_() {
 function createUser_(data) {
   adminOnly_();
   const username = String((data && data.username) || '').trim().toLowerCase();
-  const fullName = String((data && data.fullName) || '').trim().slice(0, 100);
-  const role = (data && data.role === 'admin') ? 'admin' : 'employee';
+  let fullName = String((data && data.fullName) || '').trim().slice(0, 100);
+  const role = ['admin', 'employee', 'driver'].indexOf(data && data.role) > -1 ? data.role : 'employee';
+  let driverId = null;
   if (!USERNAME_PATTERN_.test(username)) return { success: false, error: 'Username must be 3-50 characters: letters, numbers, dot, dash or underscore.' };
+  if (role === 'driver') {
+    driverId = txt_(data && data.driverId);
+    if (!driverId) return { success: false, error: 'Select the driver this account belongs to.' };
+    const driver = getTableData_(SHEETS.DRIVERS, 'driver_id=' + eq_(driverId))[0];
+    if (!driver) return { success: false, error: 'Selected driver not found. Refresh the page and try again.' };
+    fullName = txt_(driver['Driver Name']).slice(0, 100);
+    const existingDriverAccounts = dbRequest_('get', 'app_users?driver_id=eq.' +
+      encodeURIComponent(driverId) + '&select=username&limit=1') || [];
+    if (existingDriverAccounts.length) return { success: false, error: 'That driver already has an account.' };
+  }
   if (!fullName) return { success: false, error: "Enter the employee's full name." };
 
   const temp = generateTempPassword_();
   const salt = newSalt_();
   try {
     dbRequest_('post', 'app_users',
-      { username: username, full_name: fullName, role: role, salt: salt, password_hash: hashPassword_(salt, temp),
+      { username: username, full_name: fullName, role: role, driver_id: driverId, salt: salt, password_hash: hashPassword_(salt, temp),
         is_active: true, must_change_password: true, created_by: CURRENT_SESSION_.u },
       { Prefer: 'return=minimal' });
   } catch (err) {
-    if (String(err).indexOf('Database error 409') > -1) return { success: false, error: 'That username already exists.' };
+    if (String(err).indexOf('Database error 409') > -1) {
+      return { success: false, error: role === 'driver' ? 'That username already exists or the driver is already linked to an account.' : 'That username already exists.' };
+    }
     throw err;
   }
-  dbLog_('user_created', username, 'role=' + role);
+  dbLog_('user_created', username, 'role=' + role + (role === 'driver' ? ', driver=' + fullName : ''));
   return { success: true, username: username, fullName: fullName, role: role, tempPassword: temp };
 }
 

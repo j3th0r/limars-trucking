@@ -455,9 +455,7 @@
     .header { display: grid; grid-template-columns: auto 1fr; grid-template-areas: "brand filters" "sub filters"; align-items: center; column-gap: 32px; row-gap: 0;
       padding: 14px var(--gutter); background: #fff; border-bottom: 1px solid var(--line); box-shadow: none; position: relative; }
     .header h1 { grid-area: brand; display: flex; align-items: center; gap: 12px; margin: 0; font-size: 19px; font-weight: 800; letter-spacing: .05em; color: var(--navy-900); text-transform: uppercase; line-height: 1.1; }
-    .header h1::before { content: 'L'; display: grid; place-items: center; width: 38px; height: 38px; flex: none; border-radius: 10px; color: #fff; font-size: 18px; letter-spacing: 0;
-      background: linear-gradient(135deg, var(--navy-900), var(--accent)); box-shadow: 0 4px 10px rgba(37,99,235,.28); }
-    .header p { grid-area: sub; margin: 3px 0 0 50px; max-width: 430px; font-size: 11.5px; line-height: 1.35; color: var(--muted); }
+    .header p { grid-area: sub; margin: 3px 0 0; max-width: 430px; font-size: 11.5px; line-height: 1.35; color: var(--muted); }
     .filter-bar { grid-area: filters; justify-self: end; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0; padding: 0; border: 0; }
     .filter-bar label { color: var(--muted); font-size: 11px; letter-spacing: .08em; margin-right: 4px; }
     .filter-btn { background: #fff; border: 1px solid var(--line); color: var(--ink-2); border-radius: 999px; padding: 7px 15px; font-size: 12.5px; font-weight: 600; }
@@ -550,6 +548,29 @@
     @media (max-width: 700px) { .acct-name { display: none; } .acct-trigger { padding-right: 10px !important; } }
 
     .data-table td .invoice-btn[data-type] { white-space: nowrap; }
+
+    .driver-dashboard { display: none; max-width: 1000px; margin: 32px auto; padding: 24px; }
+    body.driver-mode > .container > .header,
+    body.driver-mode > .container > .nav-tabs,
+    body.driver-mode .container > .content-section { display: none !important; }
+    body.driver-mode .driver-dashboard { display: block; }
+    .driver-trip-status { min-width: 180px; }
+    .driver-dashboard .chart-container { margin-top: 18px; padding: 22px; }
+    .driver-dashboard .data-table { min-width: 760px; }
+    .driver-table-scroll { overflow-x: auto; }
+    .driver-signature { display: block; width: 100%; max-width: 520px; height: 150px; touch-action: none; border: 1px solid var(--line-2); border-radius: 8px; background: #fff; }
+    .driver-profile-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(190px,1fr)); gap: 14px; }
+    .driver-profile-item { background: var(--navy-50); padding: 12px; border-radius: 8px; }
+    .driver-profile-item strong { display:block; font-size:11px; color:var(--muted); text-transform:uppercase; margin-bottom:4px; }
+    .driver-proof-thumb { max-width: 88px; max-height: 70px; border-radius: 5px; vertical-align: middle; }
+    .driver-nav-tabs, .trip-nav-tabs { display:flex; flex-wrap:wrap; gap:8px; margin:20px 0; padding:8px; border:1px solid var(--line); border-radius:12px; background:#fff; }
+    .driver-nav-tabs { position:sticky; top:8px; z-index:20; box-shadow:var(--shadow-sm); }
+    .driver-nav-tab, .trip-nav-tab { border:0; border-radius:8px; background:transparent; color:var(--ink-2); padding:10px 16px; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; }
+    .driver-nav-tab.active, .trip-nav-tab.active { background:var(--navy-900); color:#fff; }
+    .driver-page, .trip-panel { display:none; }
+    .driver-page.active, .trip-panel.active { display:block; }
+    .driver-overview-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px; margin-top:20px; }
+    body.driver-mode .driver-dashboard { max-width:1200px; }
   </style>
 </head>
 <body>
@@ -607,6 +628,86 @@
     </div>
     
     <div id="alert" class="alert"></div>
+
+    <main id="driverDashboard" class="driver-dashboard chart-container">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+        <div>
+          <h1 style="color:var(--navy-900);font-size:23px;">Driver Trip Dashboard</h1>
+          <p id="driverWelcome" style="color:var(--muted);margin-top:4px;"></p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="btn btn-secondary" onclick="usrOpenChangePw()">Change password</button>
+          <button type="button" class="btn btn-secondary" onclick="loadDriverDashboard()">Refresh</button>
+          <button type="button" class="btn btn-secondary" onclick="signOut()">Sign out</button>
+        </div>
+      </div>
+      <nav class="driver-nav-tabs" aria-label="Driver dashboard navigation">
+        <button type="button" class="driver-nav-tab active" data-driver-page="overview" onclick="showDriverPage('overview')">Overview</button>
+        <button type="button" class="driver-nav-tab" data-driver-page="trips" onclick="showDriverPage('trips')">My Trips</button>
+        <button type="button" class="driver-nav-tab" data-driver-page="incidents" onclick="showDriverPage('incidents')">Problems &amp; Delays</button>
+        <button type="button" class="driver-nav-tab" data-driver-page="profile" onclick="showDriverPage('profile')">My Profile</button>
+      </nav>
+      <section id="driverPageOverview" class="driver-page active">
+        <div class="driver-overview-cards">
+          <div class="stat-card"><h3>ACTIVE TRIPS</h3><div class="stat-value" id="driverActiveCount">0</div></div>
+          <div class="stat-card"><h3>COMPLETED DELIVERIES</h3><div class="stat-value" id="driverCompletedCount">0</div></div>
+          <div class="stat-card"><h3>REPORTED PROBLEMS</h3><div class="stat-value" id="driverIncidentCount">0</div></div>
+        </div>
+        <section class="chart-container">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+            <h2 style="margin:0!important;">Next assignments</h2>
+            <button type="button" class="btn btn-secondary" onclick="showDriverPage('trips')">View all trips</button>
+          </div>
+          <div id="driverOverviewTrips" class="driver-table-scroll" style="margin-top:14px;"></div>
+        </section>
+        <section class="chart-container">
+          <h2>Latest dispatch reports</h2>
+          <div id="driverOverviewIncidents" class="driver-table-scroll"></div>
+        </section>
+      </section>
+      <section id="driverPageTrips" class="driver-page">
+        <section class="chart-container">
+          <h2>Current Assignments</h2>
+          <p class="usr-note">Location sharing is optional. Start it only while In Transit or Delayed; your browser will ask permission. Dispatch sees updates about every 30 seconds. Stop sharing at any time; points are removed when stopped and stale points are hidden after two minutes.</p>
+          <div id="driverCurrentTrips" class="driver-table-scroll"></div>
+        </section>
+        <section class="chart-container">
+          <h2>Completed Deliveries &amp; Previous Assignments</h2>
+          <div id="driverCompletedTrips" class="driver-table-scroll"></div>
+        </section>
+      </section>
+      <section id="driverPageIncidents" class="driver-page">
+        <section class="chart-container">
+          <h2>Report a Problem or Delay</h2>
+          <p class="usr-note">Reports are shared with dispatch and mark an active trip as Delayed.</p>
+          <div class="form-grid">
+            <div class="form-group"><label for="driverIncidentTrip">Trip</label><select id="driverIncidentTrip"></select></div>
+            <div class="form-group"><label for="driverIncidentType">Problem type</label>
+              <select id="driverIncidentType">
+                <option value="">Select a problem</option>
+                <option>Traffic or road closures</option>
+                <option>Truck breakdown</option>
+                <option>Accident or emergency</option>
+                <option>Incorrect delivery information</option>
+                <option>Delayed loading or unloading</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group"><label for="driverIncidentDetails">Details for dispatch</label><textarea id="driverIncidentDetails" rows="3" maxlength="1000" placeholder="Describe what happened and any assistance needed"></textarea></div>
+          <button type="button" class="btn btn-primary" onclick="submitDriverIncident()">Send report to dispatch</button>
+        </section>
+        <section class="chart-container">
+          <h2>My Reported Incidents</h2>
+          <div id="driverIncidentList" class="driver-table-scroll"></div>
+        </section>
+      </section>
+      <section id="driverPageProfile" class="driver-page">
+        <section class="chart-container">
+          <h2>My Profile</h2>
+          <div id="driverProfile" class="driver-profile-grid"><p class="usr-note">Loading profile...</p></div>
+        </section>
+      </section>
+    </main>
     
     <!-- Dashboard Section -->
     <div id="dashboard" class="content-section active">
@@ -643,7 +744,7 @@
           <div class="stat-change">In selected period</div>
         </div>
       </div>
-      
+
       <div class="chart-container">
         <h2>Revenue & Expenses Trend</h2>
         <canvas id="monthlyTrendChart" height="80"></canvas>
@@ -676,6 +777,44 @@
 
 <!-- Trips Section -->
 <div id="trips" class="content-section">
+  <nav class="trip-nav-tabs" aria-label="Trip navigation">
+    <button type="button" class="trip-nav-tab active" data-trip-panel="history" onclick="showTripPanel('history')">All Trips</button>
+    <button type="button" class="trip-nav-tab" data-trip-panel="tracking" onclick="showTripPanel('tracking')">Status &amp; Tracking</button>
+    <button type="button" class="trip-nav-tab" data-trip-panel="create" onclick="showTripPanel('create')">Add Trip</button>
+  </nav>
+  <div id="tripPanelHistory" class="trip-panel active">
+    <div class="chart-container">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <h2 style="margin:0!important;">All Trips</h2>
+        <button type="button" class="btn btn-primary" onclick="showTripPanel('create')">Add Trip</button>
+      </div>
+      <div id="tripsTableContainer" style="margin-top:16px;"></div>
+    </div>
+  </div>
+  <div id="tripPanelTracking" class="trip-panel">
+    <div class="chart-container">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <h2 style="margin:0!important;">Trip Status &amp; Tracking</h2>
+        <button type="button" class="btn btn-secondary" onclick="loadData()">Refresh Status</button>
+      </div>
+      <p style="color:var(--muted);margin:12px 0;">Track active assignments, delivery updates, proof of delivery, and status history.</p>
+      <div id="tripStatusSummary" class="stats-grid" style="margin-bottom:16px;"></div>
+      <div id="tripStatusBoard"></div>
+    </div>
+    <div class="chart-container">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <h2 style="margin:0!important;">Live Driver Locations</h2>
+        <button type="button" class="btn btn-secondary" onclick="refreshEmployeeDriverLocations()">Refresh locations</button>
+      </div>
+      <p class="usr-note" style="margin:12px 0;">Only drivers who start sharing on an In Transit or Delayed trip appear here. The app keeps the latest point only, removes it when sharing stops, and hides stale points after two minutes.</p>
+      <div id="tripLocationBoard"><p class="usr-note">Loading live driver locations...</p></div>
+    </div>
+    <div class="chart-container">
+      <h2>Driver Incident Reports</h2>
+      <div id="tripIncidentBoard"></div>
+    </div>
+  </div>
+  <div id="tripPanelCreate" class="trip-panel">
   <div class="form-container">
     <!-- Hidden field to store Trip ID during editing -->
     <input type="hidden" id="editTripId" value="">
@@ -764,9 +903,6 @@
     <button id="cancelEditBtn" class="btn btn-secondary" style="display:none;" onclick="resetTripForm()">Cancel Edit</button>
   </div>
 
-  <div class="chart-container" style="margin-top: 30px;">
-    <h2>Recent Trip History</h2>
-    <div id="tripsTableContainer"></div>
   </div>
 </div>
 
@@ -1039,15 +1175,19 @@
     <!-- Calculator Section -->
     <div id="users" class="content-section">
       <div class="form-container">
-        <h2>Add Employee Account</h2>
-        <p class="usr-note">New accounts get a temporary password that is shown once. The employee must choose their own password the first time they sign in.</p>
+        <h2>Add User Account</h2>
+        <p class="usr-note">New accounts get a temporary password shown once and must choose a new password at first sign-in. Driver accounts are linked to an existing driver record.</p>
         <div class="form-grid">
-          <div class="form-group"><label for="usrFullName">Full Name</label><input type="text" id="usrFullName" maxlength="100" placeholder="e.g. Juan Dela Cruz" autocomplete="off"></div>
+          <div class="form-group" id="usrFullNameField"><label for="usrFullName">Full Name</label><input type="text" id="usrFullName" maxlength="100" placeholder="e.g. Juan Dela Cruz" autocomplete="off"></div>
           <div class="form-group"><label for="usrUsername">Username</label><input type="text" id="usrUsername" maxlength="50" placeholder="e.g. juan.delacruz" autocomplete="off"></div>
           <div class="form-group"><label for="usrRole">Role</label>
-            <select id="usrRole"><option value="employee">Employee</option><option value="admin">Admin</option></select></div>
+            <select id="usrRole" onchange="usrToggleDriverField()"><option value="employee">Employee</option><option value="admin">Admin</option><option value="driver">Driver</option></select></div>
+          <div class="form-group" id="usrDriverField" style="display:none;">
+            <label for="usrDriverId">Assign driver</label>
+            <select id="usrDriverId"><option value="">Select an existing driver</option></select>
+          </div>
         </div>
-        <button class="btn btn-primary" onclick="usrCreateUser()">Add Employee</button>
+        <button class="btn btn-primary" onclick="usrCreateUser()">Add Account</button>
       </div>
       <div class="chart-container">
         <h2>Accounts</h2>
@@ -1197,6 +1337,46 @@
     </div>
   </div>
 
+  <div id="driverPodModal" class="modal">
+    <div class="modal-content" style="max-width:650px;max-height:90vh;overflow:auto;">
+      <span class="close" onclick="closeDriverPod()">&times;</span>
+      <h2>Proof of Delivery</h2>
+      <p id="driverPodTripLabel" class="usr-note"></p>
+      <div class="form-group">
+        <label for="driverPodReceiver">Receiver's name (or capture their signature below)</label>
+        <input id="driverPodReceiver" type="text" maxlength="100" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label for="driverPodPhoto">Photo of delivered cargo (optional, JPEG/PNG/WebP up to 4 MB)</label>
+        <input id="driverPodPhoto" type="file" accept="image/jpeg,image/png,image/webp">
+      </div>
+      <div class="form-group">
+        <label>Receiver signature (optional if receiver name is entered)</label>
+        <canvas id="driverPodSignature" class="driver-signature" aria-label="Draw receiver signature"></canvas>
+        <button type="button" class="btn btn-secondary" style="margin-top:8px;" onclick="clearDriverSignature()">Clear signature</button>
+      </div>
+      <div class="form-group">
+        <label for="driverPodNotes">Damaged or missing cargo / delivery notes</label>
+        <textarea id="driverPodNotes" rows="3" maxlength="500" placeholder="Describe damage, missing items, or leave blank"></textarea>
+      </div>
+      <label style="display:flex;gap:8px;align-items:flex-start;margin:16px 0;">
+        <input id="driverPodConfirmed" type="checkbox" style="margin-top:4px;">
+        <span>I confirm this delivery was completed and the information above is accurate.</span>
+      </label>
+      <button type="button" id="driverPodSubmit" class="btn btn-primary" onclick="submitDriverPod()">Confirm delivery</button>
+      <button type="button" class="btn btn-secondary" onclick="closeDriverPod()">Cancel</button>
+    </div>
+  </div>
+
+  <div id="driverProofModal" class="modal">
+    <div class="modal-content" style="max-width:720px;max-height:90vh;overflow:auto;">
+      <span class="close" onclick="closeDriverProof()">&times;</span>
+      <h2>Delivery Proof</h2>
+      <div id="driverProofContent"></div>
+      <button type="button" class="btn btn-secondary" onclick="closeDriverProof()">Close</button>
+    </div>
+  </div>
+
   <div id="statementModal" class="modal">
     <div class="modal-content">
       <span class="close" onclick="closeStatementModal()">&times;</span>
@@ -1216,13 +1396,24 @@
 // Global Variables
 let globalData={};
 let charts={};
+let driverLocationShares = Object.create(null);
+let employeeLocationRefreshTimer = null;
+let employeeLocationRefreshBusy = false;
+let employeeLocationErrorShown = false;
 let currentFilter='month';
 let currentCustomerBalances={};
 let currentReports={};
 let currentActiveReport='profitloss';
+let activePodTripId = '';
+let signatureIsDrawing = false;
 
 window.onload = function() {
   console.log('🚀 Application starting...');
+  setupDriverSignaturePad();
+  if (window.__USER__ && window.__USER__.role === 'driver') {
+    document.body.classList.add('driver-mode');
+    document.getElementById('driverWelcome').textContent = 'Welcome, ' + (window.__USER__.fullName || 'Driver') + '. Manage assignments, delivery proof, and dispatch incident reports.';
+  }
   loadData();
   setTodayDates();
 };
@@ -1264,13 +1455,48 @@ function showSection(sectionId) {
   document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
   document.getElementById(sectionId).classList.add('active');
   event.target.classList.add('active');
+  if (sectionId === 'trips') showTripPanel('history');
+  syncEmployeeLocationPolling(sectionId === 'trips' && document.getElementById('tripPanelTracking').classList.contains('active'));
   if (sectionId === 'reports' && Object.keys(currentReports).length === 0) {
     generateAllReports();
   }
 }
 
+function showTripPanel(panelName) {
+  document.querySelectorAll('.trip-panel').forEach(function(panel) { panel.classList.remove('active'); });
+  document.querySelectorAll('.trip-nav-tab').forEach(function(tab) { tab.classList.remove('active'); });
+  const panel = document.getElementById('tripPanel' + panelName.charAt(0).toUpperCase() + panelName.slice(1));
+  if (panel) panel.classList.add('active');
+  const tab = document.querySelector('.trip-nav-tab[data-trip-panel="' + panelName + '"]');
+  if (tab) tab.classList.add('active');
+  syncEmployeeLocationPolling(panelName === 'tracking' && document.getElementById('trips').classList.contains('active'));
+}
+
+function showDriverPage(pageName) {
+  document.querySelectorAll('.driver-page').forEach(function(page) { page.classList.remove('active'); });
+  document.querySelectorAll('.driver-nav-tab').forEach(function(tab) { tab.classList.remove('active'); });
+  const page = document.getElementById('driverPage' + pageName.charAt(0).toUpperCase() + pageName.slice(1));
+  if (page) page.classList.add('active');
+  const tab = document.querySelector('.driver-nav-tab[data-driver-page="' + pageName + '"]');
+  if (tab) tab.classList.add('active');
+}
+
 function loadData(filterType, customStart, customEnd) {
   showLoading(true);
+  if (window.__USER__ && window.__USER__.role === 'driver') {
+    google.script.run.withSuccessHandler(function(data) {
+      showLoading(false);
+      if (!data || data.error) {
+        showAlert('Error loading your dashboard: ' + ((data && data.error) || 'No dashboard data was returned.'), 'error');
+        return;
+      }
+      renderDriverDashboard(data);
+    }).withFailureHandler(function(error) {
+      showLoading(false);
+      showAlert('Error loading assigned trips: ' + ((error && error.message) || error), 'error');
+    }).getDriverDashboardData();
+    return;
+  }
   const filter = filterType || currentFilter;
   google.script.run.withSuccessHandler(function(data) {
     if (data.error) {
@@ -1288,6 +1514,8 @@ function loadData(filterType, customStart, customEnd) {
     showLoading(false);
   }).getDashboardData(filter, customStart, customEnd);
 }
+
+function loadDriverDashboard() { loadData(); }
 
 // ==========================================
 // DYNAMIC UI FUNCTIONS FOR TRIPS
@@ -1549,6 +1777,8 @@ function updateCustomerBalance() {
 
 function populateTables(data) {
   createTripsTableWithInvoice('tripsTableContainer', data.trips || []);
+  createTripStatusBoard(data.trips || []);
+  renderEmployeeIncidentBoard(data.tripIncidents || []);
   createStatusTable('driversTableContainer', data.drivers || [], ['Driver ID','Driver Name','License Number','Contact Number','Driver Rate','Status'], 'drivers', 'Driver ID', 'Driver Name');
   createStatusTable('helpersTableContainer', data.helpers || [], ['Helper ID','Helper Name','Contact Number','Address','Default Rate','Status'], 'helpers', 'Helper ID', 'Helper Name');
   createStatusTable('trucksTableContainer', data.trucks || [], ['Truck ID','Plate Number','Model/Type','Status'], 'trucks', 'Truck ID', 'Plate Number');
@@ -1570,7 +1800,7 @@ function createTripsTableWithInvoice(containerId, trips) {
   }
   
   let html = '<table class="data-table"><thead><tr>';
-  html += '<th>Date</th><th>Customer</th><th>Route</th><th>Gross Income</th><th>VAT Status</th><th>Actions</th>';
+  html += '<th>Date</th><th>Customer</th><th>Route</th><th>Trip Status</th><th>Gross Income</th><th>VAT Status</th><th>Actions</th>';
   html += '</tr></thead><tbody>';
   
   trips.forEach(trip => {
@@ -1584,6 +1814,8 @@ function createTripsTableWithInvoice(containerId, trips) {
       <td>${tripDate}</td>
       <td>${trip['Customer Name']}</td>
       <td>${trip['Origin']} → ${trip['Destination']}</td>
+      <td>${escapeHtml(trip['Trip Status'] || 'Scheduled')} <button class="invoice-btn" data-action="history" data-trip-id="${escapeHtml(trip['Trip ID'])}">History</button>
+        ${(trip['POD Photo Path'] || trip['POD Signature Path']) ? `<button class="invoice-btn" data-action="proof" data-trip-id="${escapeHtml(trip['Trip ID'])}">View POD</button>` : ''}</td>
       <td style="font-weight: bold;">₱${grossIncome.toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
       <td><span class="badge ${vatStatus === 'VAT' ? 'bg-success' : 'bg-secondary'}">${vatStatus}</span></td>
       <td>
@@ -1595,6 +1827,12 @@ function createTripsTableWithInvoice(containerId, trips) {
   });
   html += '</tbody></table>';
   container.innerHTML = html;
+  container.onclick = function(event) {
+    const button = event.target.closest('button[data-action]');
+    if (!button) return;
+    if (button.dataset.action === 'history') viewTripStatusHistory(button.dataset.tripId);
+    if (button.dataset.action === 'proof') viewDriverTripProof(button.dataset.tripId);
+  };
 }
 
 function viewTripInvoice(tripId) {
@@ -2110,7 +2348,7 @@ function createTripsTableWithInvoice(containerId, trips) {
     return;
   }
   let html = '<table class="data-table"><thead><tr>';
-  html += '<th>Date</th><th>Customer</th><th>Origin/Dest</th><th>Gross (VAT Inc.)</th><th>Actions</th>';
+  html += '<th>Date</th><th>Customer</th><th>Origin/Dest</th><th>Trip Status</th><th>Gross (VAT Inc.)</th><th>Actions</th>';
   html += '</tr></thead><tbody>';
   
   trips.forEach(trip => {
@@ -2121,6 +2359,7 @@ function createTripsTableWithInvoice(containerId, trips) {
       <td>${tripDate}</td>
       <td>${trip['Customer Name']}</td>
       <td>${trip['Origin']} to ${trip['Destination']}</td>
+      <td>${escapeHtml(trip['Trip Status'] || 'Scheduled')}</td>
       <td style="font-weight:bold">${income}</td>
       <td>
         <button class="invoice-btn" onclick="viewTripInvoice('${trip['Trip ID']}')">Invoice</button>
@@ -2133,6 +2372,585 @@ function createTripsTableWithInvoice(containerId, trips) {
   container.innerHTML = html;
 }
 
+function escapeHtml(value) {
+  return String(value === undefined || value === null ? '' : value)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function canUpdateTripStatus(trip) {
+  const user = window.__USER__ || {};
+  return user.role === 'admin' || user.role === 'driver';
+}
+
+function tripStatusSelect(trip) {
+  const status = String(trip['Trip Status'] || 'Scheduled');
+  if (!canUpdateTripStatus(trip)) return '<span>' + escapeHtml(status) + '</span>';
+  const statuses = ['Scheduled', 'Loading', 'In Transit', 'Delayed', 'Delivered'];
+  let options = '';
+  if (statuses.indexOf(status) === -1) {
+    options += '<option value="' + escapeHtml(status) + '" selected disabled>' + escapeHtml(status) + ' (current)</option>';
+  }
+  statuses.forEach(function(value) {
+    options += '<option value="' + value + '"' + (status === value ? ' selected' : '') + '>' + value + '</option>';
+  });
+  return '<select class="trip-status-select" data-trip-id="' + escapeHtml(trip['Trip ID']) + '" aria-label="Update trip status">' + options + '</select>';
+}
+
+function createTripStatusBoard(trips) {
+  const summary = document.getElementById('tripStatusSummary');
+  const container = document.getElementById('tripStatusBoard');
+  const counts = { 'Scheduled': 0, 'Loading': 0, 'In Transit': 0, 'Delayed': 0, 'Delivered': 0, 'Other Status': 0 };
+  (trips || []).forEach(function(trip) {
+    const status = String(trip['Trip Status'] || 'Scheduled');
+    if (Object.prototype.hasOwnProperty.call(counts, status)) counts[status]++;
+    else counts['Other Status']++;
+  });
+  summary.innerHTML = Object.keys(counts).map(function(status) {
+    return '<div class="stat-card"><h3>' + status.toUpperCase() + '</h3><div class="stat-value">' + counts[status] + '</div></div>';
+  }).join('');
+
+  if (!trips || !trips.length) {
+    container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:16px;">No trips available</p>';
+    return;
+  }
+  let html = '<table class="data-table"><thead><tr><th>Trip</th><th>Date</th><th>Driver</th><th>Customer</th><th>Route</th><th>Current Status</th><th>Last Update</th><th>Actions</th></tr></thead><tbody>';
+  trips.forEach(function(trip) {
+    const date = trip['Date'] ? new Date(trip['Date']).toLocaleDateString('en-PH') : '-';
+    html += '<tr><td>' + escapeHtml(trip['Trip ID']) + '</td><td>' + escapeHtml(date) +
+      '</td><td>' + escapeHtml(trip['Driver Name']) + '</td><td>' + escapeHtml(trip['Customer Name']) +
+      '</td><td>' + escapeHtml(trip['Origin']) + ' to ' + escapeHtml(trip['Destination']) +
+      '</td><td>' + tripStatusSelect(trip) + '</td><td>' + tripStatusMetadata(trip) +
+      '</td><td><button class="invoice-btn" data-action="history" data-trip-id="' + escapeHtml(trip['Trip ID']) + '">History</button>' +
+      ((trip['POD Photo Path'] || trip['POD Signature Path']) ? '<button class="invoice-btn" data-action="proof" data-trip-id="' + escapeHtml(trip['Trip ID']) + '">View POD</button>' : '') +
+      '</td></tr>';
+  });
+  container.innerHTML = html + '</tbody></table>';
+  container.onchange = function(event) {
+    const select = event.target;
+    if (select.classList.contains('trip-status-select')) {
+      updateAssignedTripStatus(select.dataset.tripId, select.value);
+    }
+  };
+  container.onclick = function(event) {
+    const button = event.target.closest('button[data-action]');
+    if (!button) return;
+    if (button.dataset.action === 'history') viewTripStatusHistory(button.dataset.tripId);
+    if (button.dataset.action === 'proof') viewDriverTripProof(button.dataset.tripId);
+  };
+}
+
+function updateAssignedTripStatus(tripId, status) {
+  if (status === 'Delivered') {
+    openDriverPod(tripId);
+    return;
+  }
+  let note = '';
+  if (status === 'Delayed') {
+    note = window.prompt('Please explain the delay (required):', '');
+    if (note === null) { loadData(); return; }
+    if (!note.trim()) { showAlert('Add a note explaining the delay.', 'error'); loadData(); return; }
+  } else {
+    note = window.prompt('Status update note (optional):', '') || '';
+  }
+  showLoading(true);
+  google.script.run.withSuccessHandler(function(result) {
+    showLoading(false);
+    if (result && result.success) {
+      if (['In Transit', 'Delayed'].indexOf(result.status) === -1) stopDriverLocationWatchLocal(tripId);
+      showAlert(result.warning || ('Trip status updated to ' + result.status + '.'), result.warning ? 'error' : 'success');
+      loadData();
+    } else {
+      showAlert('Error: ' + ((result && result.error) || 'Could not update the trip status.'), 'error');
+      loadData();
+    }
+  }).withFailureHandler(function(error) {
+    showLoading(false);
+    showAlert('Error: ' + ((error && error.message) || error), 'error');
+    loadData();
+  }).updateAssignedTripStatus(tripId, status, note, '');
+}
+
+function tripStatusMetadata(trip) {
+  const at = trip['Status Updated At'];
+  const by = trip['Status Updated By'];
+  const parts = [];
+  if (at) parts.push(escapeHtml(new Date(at).toLocaleString('en-PH')));
+  if (by) parts.push('by ' + escapeHtml(by));
+  if (trip['Status Note']) parts.push(escapeHtml(trip['Status Note']));
+  if (trip['Received By']) parts.push('Received by ' + escapeHtml(trip['Received By']));
+  return parts.length ? parts.join('<br>') : '<span style="color:var(--muted)">No updates yet</span>';
+}
+
+function viewTripStatusHistory(tripId) {
+  showLoading(true);
+  google.script.run.withSuccessHandler(function(result) {
+    showLoading(false);
+    if (!result || !result.success) {
+      showAlert('Could not load trip history: ' + ((result && result.error) || 'Unknown error'), 'error');
+      return;
+    }
+    if (!result.events || !result.events.length) {
+      window.alert('No status history has been recorded for this trip yet.');
+      return;
+    }
+    const lines = result.events.map(function(item) {
+      let line = new Date(item.at).toLocaleString('en-PH') + ' — ' + item.status;
+      if (item.changed_by) line += ' by ' + item.changed_by + (item.changed_by_role ? ' (' + item.changed_by_role + ')' : '');
+      if (item.note) line += '\n  Note: ' + item.note;
+      if (item.received_by) line += '\n  Received by: ' + item.received_by;
+      return line;
+    });
+    window.alert('Status history for Trip ' + tripId + ':\n\n' + lines.join('\n\n'));
+  }).withFailureHandler(function(error) {
+    showLoading(false);
+    showAlert('Could not load trip history: ' + ((error && error.message) || error), 'error');
+  }).getTripStatusHistory(tripId);
+}
+
+function viewDriverTripProof(tripId) {
+  showLoading(true);
+  google.script.run.withSuccessHandler(function(result) {
+    showLoading(false);
+    if (!result || !result.success) {
+      showAlert('Could not load delivery proof: ' + ((result && result.error) || 'Unknown error'), 'error');
+      return;
+    }
+    const content = document.getElementById('driverProofContent');
+    let html = '';
+    if (result.photoUrl) html += '<h3>Delivered cargo</h3><img alt="Delivered cargo" src="' + escapeHtml(result.photoUrl) + '" style="max-width:100%;max-height:65vh;margin:8px 0 20px;">';
+    if (result.signatureUrl) html += '<h3>Receiver signature</h3><img alt="Receiver signature" src="' + escapeHtml(result.signatureUrl) + '" style="max-width:100%;max-height:200px;background:#fff;border:1px solid #ddd;margin-top:8px;">';
+    if (!html) html = '<p class="usr-note">No photo or signature was uploaded for this delivery.</p>';
+    content.innerHTML = html;
+    document.getElementById('driverProofModal').style.display = 'block';
+  }).withFailureHandler(function(error) {
+    showLoading(false);
+    showAlert('Could not load delivery proof: ' + ((error && error.message) || error), 'error');
+  }).getDriverTripProof(tripId);
+}
+
+function closeDriverProof() { document.getElementById('driverProofModal').style.display = 'none'; }
+
+function renderDriverDashboard(data) {
+  renderDriverProfile(data.profile || {});
+  const trips = (data.trips || []).slice().sort(function(a, b) {
+    return new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime();
+  });
+  const active = trips.filter(function(trip) { return trip.tripStatus !== 'Delivered'; });
+  const completed = trips.filter(function(trip) { return trip.tripStatus === 'Delivered'; });
+  const incidents = data.incidents || [];
+  document.getElementById('driverActiveCount').textContent = active.length;
+  document.getElementById('driverCompletedCount').textContent = completed.length;
+  document.getElementById('driverIncidentCount').textContent = incidents.length;
+  renderDriverTrips(active.slice(0, 3), 'driverOverviewTrips', false);
+  renderDriverIncidents(incidents.slice(0, 3), 'driverOverviewIncidents');
+  renderDriverTrips(active, 'driverCurrentTrips', false);
+  renderDriverTrips(completed, 'driverCompletedTrips', true);
+  renderDriverIncidents(incidents, 'driverIncidentList');
+  populateIncidentTripSelect(active);
+}
+
+function renderDriverProfile(profile) {
+  const fields = [
+    ['Full name', profile.fullName],
+    ['Username', profile.username],
+    ['Driver ID', profile.driverId],
+    ['Contact number', profile.contactNumber],
+    ['Address', profile.address],
+    ['License number', profile.licenseNumber],
+    ['Driver status', profile.driverStatus],
+    ['Account created', formatDriverDate(profile.accountCreatedAt)],
+    ['Last sign-in', formatDriverDate(profile.lastLogin)]
+  ];
+  document.getElementById('driverProfile').innerHTML = fields.map(function(field) {
+    return '<div class="driver-profile-item"><strong>' + escapeHtml(field[0]) + '</strong>' + escapeHtml(field[1] || '-') + '</div>';
+  }).join('');
+}
+
+function formatDriverDate(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  return isNaN(date.getTime()) ? '-' : date.toLocaleString('en-PH');
+}
+
+function populateIncidentTripSelect(trips) {
+  const select = document.getElementById('driverIncidentTrip');
+  if (!select) return;
+  select.innerHTML = '<option value="">Select an active assignment</option>';
+  trips.forEach(function(trip) {
+    const option = document.createElement('option');
+    option.value = trip.tripId;
+    option.textContent = trip.tripId + ' — ' + (trip.origin || '-') + ' to ' + (trip.destination || '-');
+    select.appendChild(option);
+  });
+}
+
+function renderDriverIncidents(incidents, containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  if (!incidents.length) {
+    container.innerHTML = '<p class="usr-note">You have not reported any trip problems.</p>';
+    return;
+  }
+  let html = '<table class="data-table"><thead><tr><th>Reported</th><th>Trip</th><th>Problem</th><th>Details</th></tr></thead><tbody>';
+  incidents.forEach(function(item) {
+    html += '<tr><td>' + escapeHtml(formatDriverDate(item.reported_at)) + '</td><td>' + escapeHtml(item.trip_id) +
+      '</td><td>' + escapeHtml(item.category) + '</td><td>' + escapeHtml(item.details) + '</td></tr>';
+  });
+  container.innerHTML = html + '</tbody></table>';
+}
+
+function renderEmployeeIncidentBoard(incidents) {
+  const container = document.getElementById('tripIncidentBoard');
+  if (!container) return;
+  if (!incidents.length) {
+    container.innerHTML = '<p class="usr-note">No driver incident reports.</p>';
+    return;
+  }
+  let html = '<div class="driver-table-scroll"><table class="data-table"><thead><tr><th>Reported</th><th>Trip</th><th>Driver ID</th><th>Problem</th><th>Details</th></tr></thead><tbody>';
+  incidents.forEach(function(item) {
+    html += '<tr><td>' + escapeHtml(formatDriverDate(item.reported_at)) + '</td><td>' + escapeHtml(item.trip_id) +
+      '</td><td>' + escapeHtml(item.driver_id) + '</td><td>' + escapeHtml(item.category) +
+      '</td><td>' + escapeHtml(item.details) + '</td></tr>';
+  });
+  container.innerHTML = html + '</tbody></table></div>';
+}
+
+function refreshEmployeeDriverLocations() {
+  if (employeeLocationRefreshBusy) return;
+  employeeLocationRefreshBusy = true;
+  google.script.run.withSuccessHandler(function(locations) {
+    employeeLocationRefreshBusy = false;
+    employeeLocationErrorShown = false;
+    renderEmployeeDriverLocations(locations || []);
+  }).withFailureHandler(function(error) {
+    employeeLocationRefreshBusy = false;
+    const container = document.getElementById('tripLocationBoard');
+    if (container) container.innerHTML = '<p class="usr-note">Could not load driver locations.</p>';
+    if (!employeeLocationErrorShown) {
+      employeeLocationErrorShown = true;
+      showAlert('Could not refresh driver locations: ' + ((error && error.message) || error), 'error');
+    }
+  }).getActiveDriverLocations();
+}
+
+function renderEmployeeDriverLocations(locations) {
+  const container = document.getElementById('tripLocationBoard');
+  if (!container) return;
+  if (!locations.length) {
+    container.innerHTML = '<p class="usr-note">No drivers are currently sharing a location for an active trip.</p>';
+    return;
+  }
+  let html = '<div class="driver-table-scroll"><table class="data-table"><thead><tr><th>Trip</th><th>Driver</th><th>Route</th><th>Last update</th><th>Accuracy</th><th>Map</th></tr></thead><tbody>';
+  let rendered = 0;
+  locations.forEach(function(location) {
+    const latitude = Number(location.latitude);
+    const longitude = Number(location.longitude);
+    if (!isFinite(latitude) || latitude < -90 || latitude > 90 ||
+        !isFinite(longitude) || longitude < -180 || longitude > 180) return;
+    const trip = location.trips || {};
+    const mapUrl = 'https://www.google.com/maps?q=' + latitude + ',' + longitude;
+    const accuracy = location.accuracy_m === null || location.accuracy_m === undefined
+      ? 'Not available' : Math.round(Number(location.accuracy_m)) + ' m';
+    html += '<tr><td>' + escapeHtml(location.trip_id) + '</td><td>' + escapeHtml(trip.driver_name || location.driver_id) +
+      '</td><td>' + escapeHtml(trip.origin || '-') + ' to ' + escapeHtml(trip.destination || '-') +
+      '</td><td>' + escapeHtml(formatDriverDate(location.updated_at)) + '</td><td>' + escapeHtml(accuracy) +
+      '</td><td><a href="' + mapUrl + '" target="_blank" rel="noopener noreferrer">Open map</a></td></tr>';
+    rendered++;
+  });
+  container.innerHTML = rendered === 0
+    ? '<p class="usr-note">No valid driver locations are available.</p>'
+    : html + '</tbody></table></div>';
+}
+
+function syncEmployeeLocationPolling(shouldPoll) {
+  if (window.__USER__ && window.__USER__.role === 'driver') return;
+  if (!shouldPoll) {
+    if (employeeLocationRefreshTimer) clearInterval(employeeLocationRefreshTimer);
+    employeeLocationRefreshTimer = null;
+    return;
+  }
+  if (!employeeLocationRefreshTimer) {
+    refreshEmployeeDriverLocations();
+    employeeLocationRefreshTimer = setInterval(refreshEmployeeDriverLocations, 30000);
+  }
+}
+
+function startDriverTripLocationSharing(tripId) {
+  if (!navigator.geolocation) {
+    showAlert('This browser does not support location sharing.', 'error');
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(function(position) {
+    showLoading(true);
+    google.script.run.withSuccessHandler(function(result) {
+      showLoading(false);
+      if (!result || !result.success) {
+        showAlert('Could not start location sharing: ' + ((result && result.error) || 'Unknown error'), 'error');
+        return;
+      }
+      beginDriverLocationWatch(tripId);
+      showAlert('Location sharing started for Trip ' + tripId + '. You can stop it at any time.', 'success');
+      loadDriverDashboard();
+    }).withFailureHandler(function(error) {
+      showLoading(false);
+      showAlert('Could not start location sharing: ' + ((error && error.message) || error), 'error');
+    }).startDriverLocationSharing(tripId, position.coords.latitude, position.coords.longitude, position.coords.accuracy);
+  }, function(error) {
+    const message = error.code === error.PERMISSION_DENIED
+      ? 'Location permission was denied. Allow location access in your browser settings to share your position.'
+      : 'Could not get your location: ' + error.message;
+    showAlert(message, 'error');
+  }, { enableHighAccuracy: false, maximumAge: 15000, timeout: 20000 });
+}
+
+function beginDriverLocationWatch(tripId) {
+  stopDriverLocationWatchLocal(tripId);
+  const share = { timerId: null, requesting: false, errorShown: false };
+  share.timerId = setInterval(function() {
+    if (share.requesting) return;
+    share.requesting = true;
+    navigator.geolocation.getCurrentPosition(function(position) {
+      google.script.run.withSuccessHandler(function() {
+        share.requesting = false;
+      }).withFailureHandler(function(error) {
+        share.requesting = false;
+        stopDriverLocationWatchLocal(tripId);
+        showAlert('Location upload stopped: ' + ((error && error.message) || error) +
+          '. The last point will expire automatically.', 'error');
+      }).updateDriverLocation(tripId, position.coords.latitude, position.coords.longitude, position.coords.accuracy);
+    }, function(error) {
+      share.requesting = false;
+      stopDriverLocationWatchLocal(tripId);
+      if (!share.errorShown) {
+        share.errorShown = true;
+        showAlert('Location updates stopped: ' + error.message + '. The last point will expire automatically.', 'error');
+      }
+    }, { enableHighAccuracy: false, maximumAge: 0, timeout: 20000 });
+  }, 30000);
+  driverLocationShares[tripId] = share;
+}
+
+function stopDriverLocationWatchLocal(tripId) {
+  const share = driverLocationShares[tripId];
+  if (!share) return;
+  if (share.timerId !== null) clearInterval(share.timerId);
+  delete driverLocationShares[tripId];
+}
+
+function stopDriverTripLocationSharing(tripId) {
+  showLoading(true);
+  google.script.run.withSuccessHandler(function(result) {
+    showLoading(false);
+    if (!result || !result.success) {
+      showAlert('Could not stop location sharing: ' + ((result && result.error) || 'Unknown error'), 'error');
+      return;
+    }
+    stopDriverLocationWatchLocal(tripId);
+    showAlert('Location sharing stopped. The saved location has been removed.', 'success');
+    loadDriverDashboard();
+  }).withFailureHandler(function(error) {
+    showLoading(false);
+    showAlert('Could not stop location sharing: ' + ((error && error.message) || error), 'error');
+  }).stopDriverLocationSharing(tripId);
+}
+
+window.addEventListener('pagehide', function() {
+  Object.keys(driverLocationShares).forEach(stopDriverLocationWatchLocal);
+});
+
+function renderDriverTrips(trips, containerId, completed) {
+  const container = document.getElementById(containerId);
+  if (!trips.length) {
+    container.innerHTML = '<p class="usr-note">' + (completed ? 'No completed deliveries yet.' : 'You have no active trips assigned right now.') + '</p>';
+    return;
+  }
+  let html = '<table class="data-table"><thead><tr><th>Trip</th><th>Date</th><th>Route</th><th>Cargo</th><th>Status</th><th>Last update / delivery</th><th>Location sharing</th><th>Actions</th></tr></thead><tbody>';
+  trips.forEach(function(trip) {
+    const status = trip.tripStatus || 'Scheduled';
+    const deliveryTime = completed && trip.deliveredAt ? 'Delivered at ' + formatDriverDate(trip.deliveredAt) + '<br>' : '';
+    const locationEligible = status === 'In Transit' || status === 'Delayed';
+    const isWatching = !!driverLocationShares[trip.tripId];
+    let locationButton;
+    if (completed) {
+      locationButton = '<span class="usr-note">Unavailable</span>';
+    } else if (isWatching || !locationEligible && trip.locationSharingActive) {
+      locationButton = '<button class="invoice-btn" data-action="location-stop" data-trip-id="' +
+        escapeHtml(trip.tripId) + '">Stop sharing</button>';
+    } else if (locationEligible) {
+      locationButton = '<button class="invoice-btn" data-action="location-start" data-trip-id="' +
+        escapeHtml(trip.tripId) + '">' + (trip.locationSharingActive ? 'Resume sharing' : 'Start sharing') + '</button>' +
+        (trip.locationSharingActive ? ' <button class="invoice-btn" data-action="location-stop" data-trip-id="' +
+          escapeHtml(trip.tripId) + '">Stop sharing</button>' : '');
+    } else {
+      locationButton = '<button class="invoice-btn" disabled title="Set status to In Transit or Delayed first">Available in transit</button>';
+    }
+    const metadata = {
+      'Status Updated At': trip.deliveredAt || trip.statusUpdatedAt,
+      'Status Updated By': trip.statusUpdatedBy,
+      'Status Note': trip.statusNote,
+      'Received By': trip.receivedBy
+    };
+    const actions = '<button class="invoice-btn" data-action="history" data-trip-id="' + escapeHtml(trip.tripId) + '">History</button>' +
+      (completed ? (trip.hasPodPhoto || trip.hasPodSignature ? '<button class="invoice-btn" data-action="proof" data-trip-id="' + escapeHtml(trip.tripId) + '">View proof</button>' : '') :
+        '<button class="invoice-btn" data-action="pod" data-trip-id="' + escapeHtml(trip.tripId) + '">Submit POD</button>');
+    html += '<tr><td>' + escapeHtml(trip.tripId) + (trip.podConfirmed ? '<br><span class="usr-badge on">POD confirmed</span>' : '') +
+      '</td><td>' + escapeHtml(formatDriverDate(trip.date).split(',')[0]) + '</td><td>' + escapeHtml(trip.origin) + ' to ' + escapeHtml(trip.destination) +
+      '</td><td>' + escapeHtml(trip.cargoType) + '</td><td>' + (completed ? escapeHtml(status) : tripStatusSelect({ 'Trip ID': trip.tripId, 'Trip Status': status })) +
+      '</td><td>' + deliveryTime + tripStatusMetadata(metadata) + '</td><td>' +
+      (isWatching || trip.locationSharingActive ? '<span class="usr-badge on">Sharing</span><br>' : '<span class="usr-note">Off</span><br>') +
+      locationButton + '</td><td>' + actions + '</td></tr>';
+  });
+  container.innerHTML = html + '</tbody></table>';
+  container.onchange = function(event) {
+    const select = event.target;
+    if (select.classList.contains('trip-status-select')) updateAssignedTripStatus(select.dataset.tripId, select.value);
+  };
+  container.onclick = function(event) {
+    const button = event.target.closest('button[data-action]');
+    if (!button) return;
+    if (button.dataset.action === 'history') viewTripStatusHistory(button.dataset.tripId);
+    if (button.dataset.action === 'proof') viewDriverTripProof(button.dataset.tripId);
+    if (button.dataset.action === 'pod') openDriverPod(button.dataset.tripId);
+    if (button.dataset.action === 'location-start') startDriverTripLocationSharing(button.dataset.tripId);
+    if (button.dataset.action === 'location-stop') stopDriverTripLocationSharing(button.dataset.tripId);
+  };
+}
+
+function submitDriverIncident() {
+  const tripId = document.getElementById('driverIncidentTrip').value;
+  const category = document.getElementById('driverIncidentType').value;
+  const details = document.getElementById('driverIncidentDetails').value.trim();
+  if (!tripId || !category || details.length < 5) {
+    showAlert('Select a trip and problem type, then describe the issue in at least 5 characters.', 'error');
+    return;
+  }
+  showLoading(true);
+  google.script.run.withSuccessHandler(function(result) {
+    showLoading(false);
+    if (!result || !result.success) {
+      showAlert('Could not report incident: ' + ((result && result.error) || 'Unknown error'), 'error');
+      return;
+    }
+    document.getElementById('driverIncidentDetails').value = '';
+    document.getElementById('driverIncidentType').value = '';
+    showAlert(result.warning || 'Dispatch has been notified and the trip marked Delayed.', result.warning ? 'error' : 'success');
+    loadDriverDashboard();
+  }).withFailureHandler(function(error) {
+    showLoading(false);
+    showAlert('Could not report incident: ' + ((error && error.message) || error), 'error');
+  }).reportDriverIncident(tripId, category, details);
+}
+
+function setupDriverSignaturePad() {
+  const canvas = document.getElementById('driverPodSignature');
+  if (!canvas) return;
+  const context = canvas.getContext('2d');
+  function point(event) {
+    const rect = canvas.getBoundingClientRect();
+    return { x: (event.clientX - rect.left) * canvas.width / rect.width, y: (event.clientY - rect.top) * canvas.height / rect.height };
+  }
+  canvas.addEventListener('pointerdown', function(event) {
+    signatureIsDrawing = true;
+    canvas.setPointerCapture(event.pointerId);
+    const p = point(event);
+    context.beginPath();
+    context.moveTo(p.x, p.y);
+  });
+  canvas.addEventListener('pointermove', function(event) {
+    if (!signatureIsDrawing) return;
+    const p = point(event);
+    context.lineWidth = Math.max(2, canvas.width / 260);
+    context.lineCap = 'round';
+    context.strokeStyle = '#14284b';
+    context.lineTo(p.x, p.y);
+    context.stroke();
+  });
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(function(name) {
+    canvas.addEventListener(name, function() { signatureIsDrawing = false; });
+  });
+}
+
+function clearDriverSignature() {
+  const canvas = document.getElementById('driverPodSignature');
+  canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function openDriverPod(tripId) {
+  activePodTripId = tripId;
+  document.getElementById('driverPodTripLabel').textContent = 'Trip ' + tripId + ' · Delivery date and time are recorded automatically when submitted.';
+  document.getElementById('driverPodReceiver').value = '';
+  document.getElementById('driverPodPhoto').value = '';
+  document.getElementById('driverPodNotes').value = '';
+  document.getElementById('driverPodConfirmed').checked = false;
+  clearDriverSignature();
+  document.getElementById('driverPodModal').style.display = 'block';
+}
+
+function closeDriverPod(refresh) {
+  const tripId = activePodTripId;
+  document.getElementById('driverPodModal').style.display = 'none';
+  activePodTripId = '';
+  if (tripId && refresh !== false) loadDriverDashboard();
+}
+
+function readDriverPhoto(file) {
+  return new Promise(function(resolve, reject) {
+    if (!file) { resolve(null); return; }
+    if (!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size > 4 * 1024 * 1024) {
+      reject(new Error('Choose a JPEG, PNG, or WebP image no larger than 4 MB.'));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = function() { resolve({ mimeType: file.type, data: String(reader.result).split(',')[1] || '' }); };
+    reader.onerror = function() { reject(new Error('Could not read the selected delivery photo.')); };
+    reader.readAsDataURL(file);
+  });
+}
+
+function submitDriverPod() {
+  const tripId = activePodTripId;
+  const receiver = document.getElementById('driverPodReceiver').value.trim();
+  const confirmed = document.getElementById('driverPodConfirmed').checked;
+  const notes = document.getElementById('driverPodNotes').value.trim();
+  const canvas = document.getElementById('driverPodSignature');
+  const context = canvas.getContext('2d');
+  const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+  let hasSignature = false;
+  for (let i = 3; i < pixels.length; i += 4) if (pixels[i] > 0) { hasSignature = true; break; }
+  if (!confirmed) { showAlert('Confirm the delivery before submitting proof.', 'error'); return; }
+  if (!receiver && !hasSignature) { showAlert('Enter the receiver name or capture their signature.', 'error'); return; }
+
+  const button = document.getElementById('driverPodSubmit');
+  button.disabled = true;
+  const photoFile = document.getElementById('driverPodPhoto').files[0];
+  readDriverPhoto(photoFile).then(function(photo) {
+    const proof = {
+      confirmed: confirmed,
+      photo: photo,
+      signatureData: hasSignature ? canvas.toDataURL('image/png') : ''
+    };
+    showLoading(true);
+    google.script.run.withSuccessHandler(function(result) {
+      showLoading(false);
+      button.disabled = false;
+      if (!result || !result.success) {
+        showAlert('Could not submit proof of delivery: ' + ((result && result.error) || 'Unknown error'), 'error');
+        return;
+      }
+      if (activePodTripId === tripId) closeDriverPod(false);
+      showAlert(result.warning || ('Delivery and proof recorded at ' + formatDriverDate(result.deliveredAt) + '.'), result.warning ? 'error' : 'success');
+      loadDriverDashboard();
+    }).withFailureHandler(function(error) {
+      showLoading(false);
+      button.disabled = false;
+      showAlert('Could not submit proof of delivery: ' + ((error && error.message) || error), 'error');
+    }).updateAssignedTripStatus(tripId, 'Delivered', notes, receiver, proof);
+  }).catch(function(error) {
+    button.disabled = false;
+    showAlert(error.message, 'error');
+  });
+}
 function deleteTrip(tripId) {
   if (!confirm('Are you sure you want to delete Trip ' + tripId + '? This cannot be undone.')) return;
   showLoading(true);
@@ -2149,6 +2967,7 @@ function deleteTrip(tripId) {
 function editTrip(tripId) {
   const trip = globalData.trips.find(function(t) { return t['Trip ID'] === tripId; });
   if (!trip) return;
+  showTripPanel('create');
 
   document.getElementById('editTripId').value = tripId;              // tells Save Trip to update, not add
   document.getElementById('tripFormTitle').innerHTML = 'Editing Trip: <span></span>';
@@ -2596,7 +3415,8 @@ window.onclick = function(event) {
   document.getElementById('acctName').textContent = shown;
   document.getElementById('acctAvatar').textContent = (shown.trim().charAt(0) || '?').toUpperCase();
   document.getElementById('acctHeadName').textContent = shown;
-  document.getElementById('acctHeadSub').textContent = (me.username ? '@' + me.username + ' \u00b7 ' : '') + (me.role === 'admin' ? 'Admin' : 'Employee');
+  var roleName = me.role === 'admin' ? 'Admin' : (me.role === 'driver' ? 'Driver' : 'Employee');
+  document.getElementById('acctHeadSub').textContent = (me.username ? '@' + me.username + ' \u00b7 ' : '') + roleName;
   // Cosmetic only: the server refuses these actions for non-admins anyway.
   if (me.role !== 'admin') {
     var b = document.getElementById('usersNavBtn'); if (b) b.remove();
@@ -2636,7 +3456,7 @@ function usrLoadUsers() {
   google.script.run.withSuccessHandler(function (rows) {
     if (!rows || !rows.length) { box.innerHTML = '<p class="usr-note">No accounts yet.</p>'; return; }
     var me = (window.__USER__ || {}).username;
-    var html = '<table class="data-table"><thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th><th>Last Sign-in</th><th>Created By</th><th>Actions</th></tr></thead><tbody>';
+    var html = '<table class="data-table"><thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Linked Driver</th><th>Status</th><th>Last Sign-in</th><th>Created By</th><th>Actions</th></tr></thead><tbody>';
     rows.forEach(function (u) {
       var active = u.is_active !== false;
       var status = !active ? '<span class="usr-badge off">Disabled</span>' : (u.must_change_password ? '<span class="usr-badge wait">Awaiting first sign-in</span>' : '<span class="usr-badge on">Active</span>');
@@ -2645,7 +3465,8 @@ function usrLoadUsers() {
         acts = '<button class="invoice-btn" onclick="usrToggle(\'' + u.username + '\',' + (active ? 'false' : 'true') + ')">' + (active ? 'Disable' : 'Enable') + '</button> ' +
                '<button class="invoice-btn" onclick="usrReset(\'' + u.username + '\')">Reset Password</button>';
       } else { acts = '<span class="usr-note">You</span>'; }
-      html += '<tr><td>' + usrEsc(u.full_name) + '</td><td>' + usrEsc(u.username) + '</td><td>' + (u.role === 'admin' ? 'Admin' : 'Employee') + '</td><td>' + status +
+      var roleName = u.role === 'admin' ? 'Admin' : (u.role === 'driver' ? 'Driver' : 'Employee');
+      html += '<tr><td>' + usrEsc(u.full_name) + '</td><td>' + usrEsc(u.username) + '</td><td>' + roleName + '</td><td>' + usrEsc(u.driver_id || '') + '</td><td>' + status +
               '</td><td>' + usrEsc(usrFmtDate(u.last_login)) + '</td><td>' + usrEsc(u.created_by || '') + '</td><td>' + acts + '</td></tr>';
     });
     box.innerHTML = html + '</tbody></table>';
@@ -2669,13 +3490,38 @@ function usrCopyFallback() {
   try { document.execCommand('copy'); showAlert('Copied', 'success'); } catch (e) { showAlert('Press Ctrl+C to copy the selected password', 'error'); }
 }
 
+function usrToggleDriverField() {
+  var isDriver = document.getElementById('usrRole').value === 'driver';
+  var field = document.getElementById('usrDriverField');
+  var select = document.getElementById('usrDriverId');
+  var nameField = document.getElementById('usrFullNameField');
+  field.style.display = isDriver ? '' : 'none';
+  nameField.style.display = isDriver ? 'none' : '';
+  select.innerHTML = '<option value="">Select an existing driver</option>';
+  if (!isDriver) return;
+  (globalData.drivers || []).forEach(function(driver) {
+    var option = document.createElement('option');
+    option.value = driver['Driver ID'];
+    option.textContent = driver['Driver Name'] + ' (' + driver['Driver ID'] + ')';
+    option.dataset.name = driver['Driver Name'];
+    select.appendChild(option);
+  });
+  select.onchange = function() {
+    document.getElementById('usrFullName').value = this.options[this.selectedIndex].dataset.name || '';
+  };
+}
+
 function usrCreateUser() {
   var data = { fullName: document.getElementById('usrFullName').value, username: document.getElementById('usrUsername').value, role: document.getElementById('usrRole').value };
+  if (data.role === 'driver') {
+    data.driverId = document.getElementById('usrDriverId').value;
+    if (!data.driverId) { showAlert('Select the driver this account belongs to.', 'error'); return; }
+  }
   showLoading(true);
   google.script.run.withSuccessHandler(function (res) {
     showLoading(false);
     if (!res || !res.success) { showAlert((res && res.error) || 'Could not create the account.', 'error'); return; }
-    document.getElementById('usrFullName').value = ''; document.getElementById('usrUsername').value = ''; document.getElementById('usrRole').value = 'employee';
+    document.getElementById('usrFullName').value = ''; document.getElementById('usrUsername').value = ''; document.getElementById('usrRole').value = 'employee'; usrToggleDriverField();
     usrShowPw('Account created', res.fullName + ' (' + res.username + ')', res.tempPassword);
     usrLoadUsers();
   }).withFailureHandler(function (e) { showLoading(false); showAlert('Error: ' + ((e && e.message) || e), 'error'); }).createUser(data);

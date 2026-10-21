@@ -1,5 +1,5 @@
 /**
- * REYNA ADVANCED TRACKER FOR TRUCKING BUSINESS - ENHANCED VERSION
+ * LIMARS ADVANCED TRACKER FOR TRUCKING BUSINESS - ENHANCED VERSION
  * Complete Trucking Management System
  * Google Apps Script backend  +  Postgres (Supabase) database
  */
@@ -14,6 +14,7 @@ const SHEETS = {
   EXPENSES: 'Expenses',
   ROUTES: 'Routes',
   PAYMENTS: 'Payments',
+  PAYMENT_ALLOCATIONS: 'Payment Allocations',
   SETTINGS: 'Settings'
 };
 
@@ -22,10 +23,11 @@ const TABLES_ = {
   Drivers:   { table: 'drivers',   order: 'created_at.asc,driver_id.asc',   cols: [['Driver ID', 'driver_id'], ['Driver Name', 'driver_name'], ['License Number', 'license_number'], ['Contact Number', 'contact_number'], ['Address', 'address'], ['Driver Rate', 'driver_rate'], ['Status', 'status'], ['Date Added', 'date_added']] },
   Helpers:   { table: 'helpers',   order: 'created_at.asc,helper_id.asc',   cols: [['Helper ID', 'helper_id'], ['Helper Name', 'helper_name'], ['Contact Number', 'contact_number'], ['Address', 'address'], ['Default Rate', 'default_rate'], ['Status', 'status'], ['Date Added', 'date_added']] },
   Trucks:    { table: 'trucks',    order: 'created_at.asc,truck_id.asc',    cols: [['Truck ID', 'truck_id'], ['Plate Number', 'plate_number'], ['Model/Type', 'model_type'], ['Status', 'status'], ['Date Added', 'date_added']] },
-  Customers: { table: 'customers', order: 'created_at.asc,customer_id.asc', cols: [['Customer ID', 'customer_id'], ['Customer Name', 'customer_name'], ['Company Name', 'company_name'], ['Contact Number', 'contact_number'], ['Email', 'email'], ['Address', 'address'], ['Credit Limit', 'credit_limit'], ['Current Balance', 'current_balance'], ['Payment Terms', 'payment_terms'], ['Status', 'status'], ['Date Added', 'date_added']] },
-  Trips:     { table: 'trips',     order: 'created_at.asc,trip_id.asc',     cols: [['Trip ID', 'trip_id'], ['Date', 'trip_date'], ['Driver ID', 'driver_id'], ['Driver Name', 'driver_name'], ['Customer Name', 'customer_name'], ['Origin', 'origin'], ['Destination', 'destination'], ['Distance', 'distance'], ['Cargo Type', 'cargo_type'], ['Weight', 'weight'], ['Trip Rate', 'trip_rate'], ['Fuel Cost', 'fuel_cost'], ['Toll Fee', 'toll_fee'], ['Meal Allowance', 'meal_allowance'], ['Other Expenses', 'other_expenses'], ['Total Expenses', 'total_expenses'], ['Gross Income', 'gross_income'], ['Net Profit', 'net_profit'], ['Payment Status', 'payment_status'], ['Trip Status', 'trip_status'], ['Status Updated At', 'status_updated_at'], ['Status Updated By', 'status_updated_by'], ['Status Note', 'status_note'], ['Received By', 'received_by'], ['Delivered At', 'delivered_at'], ['POD Confirmed', 'pod_confirmed'], ['POD Photo Path', 'pod_photo_path'], ['POD Signature Path', 'pod_signature_path'], ['Notes', 'notes'], ['Trucks Data', 'trucks_data'], ['Helpers Data', 'helpers_data', 'json'], ['Driver Pay', 'driver_pay'], ['Customer Subsidy', 'customer_subsidy'], ['VAT Status', 'vat_status']] },
+  Customers: { table: 'customers', order: 'created_at.asc,customer_id.asc', cols: [['Customer ID', 'customer_id'], ['Customer Name', 'customer_name'], ['Company Name', 'company_name'], ['Contact Number', 'contact_number'], ['Email', 'email'], ['Address', 'address'], ['Credit Limit', 'credit_limit'], ['Payment Terms', 'payment_terms'], ['Status', 'status'], ['Date Added', 'date_added']] },
+  Trips:     { table: 'trips',     order: 'created_at.asc,trip_id.asc',     cols: [['Trip ID', 'trip_id'], ['Date', 'trip_date'], ['Driver ID', 'driver_id'], ['Driver Name', 'driver_name'], ['Customer ID', 'customer_id'], ['Customer Name', 'customer_name'], ['Origin', 'origin'], ['Destination', 'destination'], ['Distance', 'distance'], ['Cargo Type', 'cargo_type'], ['Weight', 'weight'], ['Trip Rate', 'trip_rate'], ['Fuel Cost', 'fuel_cost'], ['Toll Fee', 'toll_fee'], ['Meal Allowance', 'meal_allowance'], ['Other Expenses', 'other_expenses'], ['Total Expenses', 'total_expenses'], ['Gross Income', 'gross_income'], ['Net Profit', 'net_profit'], ['Payment Status', 'payment_status'], ['Trip Status', 'trip_status'], ['Status Updated At', 'status_updated_at'], ['Status Updated By', 'status_updated_by'], ['Status Note', 'status_note'], ['Received By', 'received_by'], ['Delivered At', 'delivered_at'], ['POD Confirmed', 'pod_confirmed'], ['POD Photo Path', 'pod_photo_path'], ['POD Signature Path', 'pod_signature_path'], ['Notes', 'notes'], ['Trucks Data', 'trucks_data'], ['Helpers Data', 'helpers_data', 'json'], ['Driver Pay', 'driver_pay'], ['Customer Subsidy', 'customer_subsidy'], ['VAT Status', 'vat_status']] },
   Expenses:  { table: 'expenses',  order: 'created_at.asc,expense_id.asc',  cols: [['Expense ID', 'expense_id'], ['Date', 'expense_date'], ['Category', 'category'], ['Description', 'description'], ['Amount', 'amount'], ['Paid By', 'paid_by'], ['Payment Method', 'payment_method'], ['Receipt Number', 'receipt_number'], ['Notes', 'notes']] },
   Payments:  { table: 'payments',  order: 'created_at.asc,payment_id.asc',  cols: [['Payment ID', 'payment_id'], ['Customer ID', 'customer_id'], ['Customer Name', 'customer_name'], ['Payment Date', 'payment_date'], ['Amount', 'amount'], ['Payment Method', 'payment_method'], ['Reference Number', 'reference_number'], ['Notes', 'notes'], ['Timestamp', 'created_at']] },
+  'Payment Allocations': { table: 'payment_allocations', order: 'created_at.asc,id.asc', cols: [['Allocation ID', 'id'], ['Payment ID', 'payment_id'], ['Trip ID', 'trip_id'], ['Amount', 'amount'], ['Date', 'created_at']] },
   Routes:    { table: 'routes',    order: 'created_at.asc,route_id.asc',    cols: [['Route ID', 'route_id'], ['Origin', 'origin'], ['Destination', 'destination'], ['Distance', 'distance'], ['Base Rate', 'base_rate'], ['Fuel Cost Estimate', 'fuel_cost_estimate'], ['Toll Fee', 'toll_fee'], ['Estimated Time', 'estimated_time']] },
   Settings:  { table: 'settings',  order: 'setting_name.asc',               cols: [['Setting Name', 'setting_name'], ['Value', 'value']] }
 };
@@ -133,7 +135,7 @@ function getDashboardData_(filterType, customStartDate, customEndDate) {
   try {
     const dateRange = getDateRange_(filterType, customStartDate, customEndDate);
     const t = loadTables_([SHEETS.DRIVERS, SHEETS.HELPERS, SHEETS.TRUCKS, SHEETS.TRIPS, SHEETS.CUSTOMERS,
-                           SHEETS.EXPENSES, SHEETS.ROUTES, SHEETS.PAYMENTS, SHEETS.SETTINGS]);
+                           SHEETS.EXPENSES, SHEETS.ROUTES, SHEETS.PAYMENTS, SHEETS.PAYMENT_ALLOCATIONS, SHEETS.SETTINGS]);
     const result = {
       drivers: t.Drivers,
       helpers: t.Helpers,
@@ -143,6 +145,7 @@ function getDashboardData_(filterType, customStartDate, customEndDate) {
       expenses: t.Expenses.reverse(),
       routes: t.Routes,
       payments: t.Payments.reverse(),
+      paymentAllocations: t[SHEETS.PAYMENT_ALLOCATIONS],
       settings: settingsFromRows_(t.Settings),
       tripIncidents: dbRequest_('get', 'driver_incidents?select=id,trip_id,driver_id,category,details,reported_at,reported_by&order=reported_at.desc&limit=200') || [],
       dateRange: dateRange
@@ -384,7 +387,8 @@ function addCustomer_(customerData) {
 function addExpense_(expenseData) {
   try {
     const d = expenseData || {};
-    const row = dbInsert_('expenses', { expense_date: dateStr_(d.date), category: txt_(d.category), description: txt_(d.description), amount: Math.abs(num_(d.amount)),
+    const amount = positiveAmount_(d.amount, 'Expense amount');
+    const row = dbInsert_('expenses', { expense_date: dateStr_(d.date), category: txt_(d.category), description: txt_(d.description), amount: amount,
       paid_by: txt_(d.paidBy), payment_method: txt_(d.paymentMethod) || 'Cash', receipt_number: txt_(d.receiptNumber), notes: txt_(d.notes) });
     return { success: true, expenseId: row.expense_id };
   } catch (error) { return { success: false, error: dbFriendlyError_(error, 'This expense') }; }
@@ -394,15 +398,58 @@ function addPayment_(paymentData) {
   try {
     const d = paymentData || {};
     if (!txt_(d.customerId)) return { success: false, error: 'Select a customer.' };
-    const row = dbInsert_('payments', { customer_id: txt_(d.customerId), customer_name: txt_(d.customerName), payment_date: dateStr_(d.paymentDate),
-      amount: Math.abs(num_(d.amount)), payment_method: txt_(d.paymentMethod) || 'Cash', reference_number: txt_(d.referenceNumber), notes: txt_(d.notes) });
-    return { success: true, paymentId: row.payment_id };
+    const amount = positiveAmount_(d.amount, 'Payment amount');
+    const allocations = Array.isArray(d.allocations) ? d.allocations : [];
+    const result = dbRequest_('post', 'rpc/record_customer_payment', {
+      p_customer_id: txt_(d.customerId),
+      p_payment_date: dateStr_(d.paymentDate),
+      p_amount: amount,
+      p_payment_method: txt_(d.paymentMethod) || 'Cash',
+      p_reference_number: txt_(d.referenceNumber),
+      p_notes: txt_(d.notes),
+      p_allocations: allocations
+    });
+    return { success: true, paymentId: result && result.paymentId };
   } catch (error) { return { success: false, error: dbFriendlyError_(error, 'This payment') }; }
+}
+
+function applyExistingPayment_(paymentId, allocations) {
+  try {
+    if (!txt_(paymentId)) return { success: false, error: 'Select an existing payment.' };
+    if (!Array.isArray(allocations) || !allocations.length) return { success: false, error: 'Enter at least one invoice allocation.' };
+    const result = dbRequest_('post', 'rpc/apply_existing_payment_allocations', {
+      p_payment_id: txt_(paymentId),
+      p_allocations: allocations
+    });
+    return { success: true, allocatedAmount: result && result.allocatedAmount };
+  } catch (error) { return { success: false, error: dbFriendlyError_(error, 'These invoice allocations') }; }
+}
+
+function positiveAmount_(value, label) {
+  const amount = currencyAmount_(value, label);
+  if (amount <= 0) throw new Error(label + ' must be a valid amount greater than zero.');
+  return amount;
+}
+
+function currencyAmount_(value, label) {
+  const amount = (typeof value === 'number') ? value : Number(txt_(value));
+  if (!Number.isFinite(amount) || amount < 0) throw new Error(label + ' must be a valid non-negative amount.');
+  if (Math.abs(amount * 100 - Math.round(amount * 100)) > 1e-7) {
+    throw new Error(label + ' must have no more than two decimal places.');
+  }
+  return Math.round((amount + Number.EPSILON) * 100) / 100;
+}
+
+function nonNegativeAmount_(value, label) {
+  const amount = (value === undefined || value === null || txt_(value) === '') ? 0 :
+    (typeof value === 'number' ? value : Number(txt_(value)));
+  if (!Number.isFinite(amount) || amount < 0) throw new Error(label + ' must be a valid non-negative amount.');
+  return Math.round((amount + Number.EPSILON) * 100) / 100;
 }
 
 // Field name sent by the dashboard -> database column of the trips table.
 const TRIP_DB_ = {
-  date: 'trip_date', driverId: 'driver_id', driverName: 'driver_name', customerName: 'customer_name', origin: 'origin', destination: 'destination',
+  date: 'trip_date', driverId: 'driver_id', driverName: 'driver_name', customerId: 'customer_id', customerName: 'customer_name', origin: 'origin', destination: 'destination',
   distance: 'distance', cargoType: 'cargo_type', weight: 'weight', tripRate: 'trip_rate', fuelCost: 'fuel_cost', tollFee: 'toll_fee',
   mealAllowance: 'meal_allowance', otherExpenses: 'other_expenses', totalExpenses: 'total_expenses', grossIncome: 'gross_income', netProfit: 'net_profit',
   paymentStatus: 'payment_status', tripStatus: 'trip_status', notes: 'notes', trucksData: 'trucks_data', helpersData: 'helpers_data',
@@ -423,30 +470,66 @@ function tripToDb_(t, onlyProvided) {
       try { v = (typeof v === 'string') ? JSON.parse(v || '[]') : (v || []); } catch (e) { v = []; }
       if (!Array.isArray(v)) v = [];
     }
-    else if (key === 'driverId') v = txt_(v) || null;
+    else if (key === 'driverId' || key === 'customerId') v = txt_(v) || null;
     else v = txt_(v);
     out[TRIP_DB_[key]] = v;
   });
   return out;
 }
 
-function normalizeTrip_(t) {
-  const n = function (v) { return parseFloat(String(v === undefined || v === null ? 0 : v).replace(/[^0-9.-]/g, '')) || 0; };
-  const hasCosts = t.fuelCost !== undefined || t.driverPay !== undefined;
+function normalizeTrip_(tripData, existingTrip) {
+  const legacyToInput = {
+    date: 'Date', driverId: 'Driver ID', driverName: 'Driver Name', customerId: 'Customer ID', customerName: 'Customer Name',
+    tripRate: 'Trip Rate', customerSubsidy: 'Customer Subsidy', vatStatus: 'VAT Status', fuelCost: 'Fuel Cost',
+    tollFee: 'Toll Fee', mealAllowance: 'Meal Allowance', otherExpenses: 'Other Expenses', driverPay: 'Driver Pay',
+    helpersData: 'Helpers Data'
+  };
+  const trip = {};
+  if (existingTrip) {
+    Object.keys(legacyToInput).forEach(function (key) { trip[key] = existingTrip[legacyToInput[key]]; });
+    trip.tripId = existingTrip['Trip ID'];
+  }
+  Object.keys(tripData || {}).forEach(function (key) { trip[key] = tripData[key]; });
+
+  trip.tripRate = currencyAmount_(trip.tripRate, 'Trip rate');
+  trip.customerSubsidy = currencyAmount_(trip.customerSubsidy, 'Customer subsidy');
+  trip.fuelCost = currencyAmount_(trip.fuelCost, 'Fuel cost');
+  trip.tollFee = currencyAmount_(trip.tollFee, 'Toll fee');
+  trip.mealAllowance = currencyAmount_(trip.mealAllowance, 'Meal allowance');
+  trip.otherExpenses = currencyAmount_(trip.otherExpenses, 'Other expenses');
+  trip.driverPay = currencyAmount_(trip.driverPay, 'Driver pay');
+  trip.distance = nonNegativeAmount_(trip.distance, 'Distance');
+  trip.weight = nonNegativeAmount_(trip.weight, 'Weight');
+  if (!trip.vatStatus) trip.vatStatus = 'VAT';
+  if (trip.vatStatus !== 'VAT' && trip.vatStatus !== 'Non-VAT') throw new Error('Select a valid tax type.');
+
+  let helpers;
+  try { helpers = typeof trip.helpersData === 'string' ? JSON.parse(trip.helpersData || '[]') : (trip.helpersData || []); }
+  catch (error) { throw new Error('Helper pay data is invalid. Please review the helpers on this trip.'); }
+  if (!Array.isArray(helpers)) throw new Error('Helper pay data must be a list.');
   let helperPay = 0;
-  try { JSON.parse(t.helpersData || '[]').forEach(function (h) { helperPay += n(h.pay); }); } catch (e) {}
-  if (hasCosts && (t.totalExpenses === undefined || t.totalExpenses === '')) {
-    t.totalExpenses = n(t.fuelCost) + n(t.tollFee) + n(t.mealAllowance) + n(t.otherExpenses) + n(t.driverPay) + helperPay;
-  }
-  if (hasCosts && (t.netProfit === undefined || t.netProfit === '')) {
-    t.netProfit = n(t.grossIncome) - n(t.totalExpenses);
-  }
-  return t;
+  helpers = helpers.map(function (helper) {
+    if (!helper || !txt_(helper.name)) throw new Error('Each trip helper must have a name.');
+    const pay = currencyAmount_(helper.pay, 'Helper pay');
+    helperPay += pay;
+    return { name: txt_(helper.name), pay: pay };
+  });
+  trip.helpersData = JSON.stringify(helpers);
+
+  const gross = trip.tripRate * (trip.vatStatus === 'VAT' ? 1.12 : 1) + trip.customerSubsidy;
+  const expenses = trip.fuelCost + trip.tollFee + trip.mealAllowance + trip.otherExpenses + trip.driverPay + helperPay;
+  trip.grossIncome = Math.round((gross + Number.EPSILON) * 100) / 100;
+  trip.totalExpenses = Math.round((expenses + Number.EPSILON) * 100) / 100;
+  trip.netProfit = Math.round((trip.grossIncome - trip.totalExpenses + Number.EPSILON) * 100) / 100;
+  return trip;
 }
 
 function addTrip_(tripData) {
   try {
     const t = normalizeTrip_(tripData || {});
+    const customer = getTableData_(SHEETS.CUSTOMERS, 'customer_id=' + eq_(t.customerId))[0];
+    if (!customer) return { success: false, error: 'Select a valid customer.' };
+    t.customerName = customer['Customer Name'];
     const unavailable = findUnavailableResources_(t);
     if (unavailable.length) {
       return { success: false, error: 'Cannot create the trip. Not available: ' + unavailable.join(', ') + '. Change their status or pick someone else.' };
@@ -523,25 +606,27 @@ function generatePayrollInvoice_(employeeName, role, periodStart, periodEnd) {
 }
 
 function generatePayrollInvoiceHTML_(driver, trips, periodStart, periodEnd, grossEarnings, settings) {
-  const companyName = settings['Company Name'] || 'Reyna Trucking Business';
+  const companyName = settings['Company Name'] || 'Limars Trucking Business';
   const companyAddress = settings['Company Address'] || '';
+  const escape = htmlEscape_;
   let tripsHtml = '';
 
   trips.forEach(trip => {
     tripsHtml += `<tr>
         <td style="color: #1565c0; border-bottom: 1px solid #eee; padding: 10px;">${parseDate_(trip['Date']).toLocaleDateString('en-PH')}</td>
-        <td style="color: #1565c0; border-bottom: 1px solid #eee; padding: 10px;">${trip['Origin']} → ${trip['Destination']}</td>
+        <td style="color: #1565c0; border-bottom: 1px solid #eee; padding: 10px;">${escape(trip['Origin'])} → ${escape(trip['Destination'])}</td>
         <td style="color: #1565c0; font-weight: 600; border-bottom: 1px solid #eee; padding: 10px;">₱${(trip._tempPay || 0).toLocaleString('en-PH', {minimumFractionDigits: 2})}</td>
       </tr>`;
   });
 
   return `
     <div style="font-family: Arial; padding: 20px;">
-      <h2 style="text-align: center; color: #1565c0; border-bottom: 2px solid #1565c0; padding-bottom: 10px;">${companyName}</h2>
+      <h2 style="text-align: center; color: #1565c0; border-bottom: 2px solid #1565c0; padding-bottom: 10px;">${escape(companyName)}</h2>
       <h3 style="text-align: center; color: #1565c0;">PAYROLL SUMMARY</h3>
       <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin: 20px 0;">
-        <p><strong>Employee:</strong> ${driver['Driver Name']}</p>
-        <p><strong>Period:</strong> ${new Date(periodStart).toLocaleDateString('en-PH')} - ${new Date(periodEnd).toLocaleDateString('en-PH')}</p>
+        <p><strong>Employee:</strong> ${escape(driver['Driver Name'])}</p>
+        <p><strong>Address:</strong> ${escape(companyAddress)}</p>
+        <p><strong>Period:</strong> ${escape(new Date(periodStart).toLocaleDateString('en-PH'))} - ${escape(new Date(periodEnd).toLocaleDateString('en-PH'))}</p>
       </div>
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
         <tr style="background: #1565c0; color: white;">
@@ -555,13 +640,20 @@ function generatePayrollInvoiceHTML_(driver, trips, periodStart, periodEnd, gros
     </div>`;
 }
 
+function htmlEscape_(value) {
+  return String(value === undefined || value === null ? '' : value)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 function getTripInvoice_(tripId) {
   try {
     const trip = getTableData_(SHEETS.TRIPS, 'trip_id=' + eq_(tripId))[0];
     if (!trip) return { success: false, error: 'Trip not found' };
     const settings = getSettingsData_();
-    // Safely grab customer or fallback to empty object if not found
-    const customer = getTableData_(SHEETS.CUSTOMERS, 'customer_name=' + eq_(trip['Customer Name']))[0] || {};
+    const customer = trip['Customer ID']
+      ? (getTableData_(SHEETS.CUSTOMERS, 'customer_id=' + eq_(trip['Customer ID']))[0] || {})
+      : {};
 
     const payload = {
       success: true,
@@ -591,15 +683,15 @@ function calculateAnalytics_(data, dateRange) {
     const startDateObj = new Date(dateRange.startDate);
     const endDateObj = new Date(dateRange.endDate);
 
-    const filteredTrips = trips.filter(trip => { try { const d = parseDate_(trip['Date']); return d && d >= startDateObj && d <= endDateObj; } catch(e) { return false; } });
+    const filteredTrips = trips.filter(trip => { try {     const d = tripRecognitionDate_(trip); return d && d >= startDateObj && d <= endDateObj; } catch(e) { return false; } });
     const filteredExpenses = expenses.filter(exp => { try { const d = parseDate_(exp['Date']); return d && d >= startDateObj && d <= endDateObj; } catch(e) { return false; } });
     const filteredPayments = payments.filter(p => { try { const d = parseDate_(p['Payment Date']); return d && d >= startDateObj && d <= endDateObj; } catch(e) { return false; } });
 
     // Revenue = Total Billed to Client (Rate + Subsidy)
-    const totalRevenue = filteredTrips.reduce((sum, trip) => sum + (parseFloat(String(trip['Gross Income']).replace(/[^0-9.-]/g, '')) || 0), 0);
+    const totalRevenue = filteredTrips.reduce((sum, trip) => sum + amountFromRecord_(trip['Gross Income']), 0);
 
     // Direct Costs / Cost of Services (Fuel, Tolls, Meals, Driver Pay, Helper Pay per trip)
-    const costOfServices = filteredTrips.reduce((sum, trip) => sum + (parseFloat(String(trip['Total Expenses']).replace(/[^0-9.-]/g, '')) || 0), 0);
+    const costOfServices = filteredTrips.reduce((sum, trip) => sum + amountFromRecord_(trip['Total Expenses']), 0);
 
     // Gross Profit = Revenue - Cost of Services
     const grossProfit = totalRevenue - costOfServices;
@@ -631,15 +723,25 @@ function calculateAnalytics_(data, dateRange) {
   } catch (error) { return {}; }
 }
 
+function amountFromRecord_(value) {
+  const amount = parseFloat(String(value === undefined || value === null ? 0 : value).replace(/[^0-9.-]/g, ''));
+  return Number.isFinite(amount) ? amount : 0;
+}
+
+function tripRecognitionDate_(trip) {
+  if (!trip || trip['Trip Status'] !== 'Delivered') return null;
+  return parseDate_(trip['Delivered At'] || trip['Date']);
+}
+
 function calculateAccountReceivables_(customers, trips, payments) {
   const receivables = [];
   customers.forEach(customer => {
     const customerId = customer['Customer ID'];
     const customerName = customer['Customer Name'];
-    const customerTrips = trips.filter(trip => trip['Customer Name'] === customerName);
-    const totalBilled = customerTrips.reduce((sum, trip) => sum + (parseFloat(String(trip['Gross Income']).replace(/[^0-9.-]/g, '')) || 0), 0);
+    const customerTrips = trips.filter(trip => trip['Customer ID'] === customerId && tripRecognitionDate_(trip));
+    const totalBilled = customerTrips.reduce((sum, trip) => sum + amountFromRecord_(trip['Gross Income']), 0);
     const customerPayments = payments.filter(payment => payment['Customer ID'] === customerId);
-    const totalPaid = customerPayments.reduce((sum, payment) => sum + (parseFloat(String(payment['Amount']).replace(/[^0-9.-]/g, '')) || 0), 0);
+    const totalPaid = customerPayments.reduce((sum, payment) => sum + amountFromRecord_(payment['Amount']), 0);
     const balance = totalBilled - totalPaid;
     if (totalBilled > 0 || balance !== 0) {
       receivables.push({ customerId, customerName, totalBilled, totalPaid, balance, creditLimit: parseFloat(String(customer['Credit Limit']).replace(/[^0-9.-]/g, '')) || 0, paymentTerms: customer['Payment Terms'] || 'COD' });
@@ -681,13 +783,14 @@ function calculateTrends_(trips, expenses, filterType) {
       periodStart = new Date(targetDate); periodEnd = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
       label = targetDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
     }
-    const periodTrips = trips.filter(trip => { try { const d = parseDate_(trip['Date']); return d && d >= periodStart && d <= periodEnd; } catch (e) { return false; } });
+    const periodTrips = trips.filter(trip => { try { const d = tripRecognitionDate_(trip); return d && d >= periodStart && d <= periodEnd; } catch (e) { return false; } });
     const periodExpenses = expenses.filter(exp => { try { const d = parseDate_(exp['Date']); return d && d >= periodStart && d <= periodEnd; } catch (e) { return false; } });
 
-    const revenue = periodTrips.reduce((sum, trip) => sum + (parseFloat(String(trip['Gross Income']).replace(/[^0-9.-]/g, '')) || 0), 0);
-    const expenseTotal = periodExpenses.reduce((sum, exp) => sum + (parseFloat(String(exp['Amount']).replace(/[^0-9.-]/g, '')) || 0), 0);
+    const revenue = periodTrips.reduce((sum, trip) => sum + amountFromRecord_(trip['Gross Income']), 0);
+    const directCosts = periodTrips.reduce((sum, trip) => sum + amountFromRecord_(trip['Total Expenses']), 0);
+    const expenseTotal = periodExpenses.reduce((sum, exp) => sum + amountFromRecord_(exp['Amount']), directCosts);
 
-    trends.push({ period: label, revenue, expenses: expenseTotal, profit: revenue - expenseTotal, trips: periodTrips.length });
+    trends.push({ period: label, revenue, directCosts, expenses: expenseTotal, profit: revenue - expenseTotal, trips: periodTrips.length });
   }
   return trends;
 }
@@ -719,12 +822,30 @@ function getCustomerStatement_(customerId) {
   try {
     const customer = getTableData_(SHEETS.CUSTOMERS, 'customer_id=' + eq_(customerId))[0];
     if (!customer) return { success: false, error: 'Customer not found' };
-    const customerTrips = getTableData_(SHEETS.TRIPS, 'customer_name=' + eq_(customer['Customer Name']));
+    const customerTrips = getTableData_(SHEETS.TRIPS, 'customer_id=' + eq_(customerId)).filter(tripRecognitionDate_);
     const customerPayments = getTableData_(SHEETS.PAYMENTS, 'customer_id=' + eq_(customerId));
+    const paymentAllocations = getTableData_(SHEETS.PAYMENT_ALLOCATIONS);
+    const allocationsByPayment = {};
+    paymentAllocations.forEach(function (allocation) {
+      if (!allocationsByPayment[allocation['Payment ID']]) allocationsByPayment[allocation['Payment ID']] = [];
+      allocationsByPayment[allocation['Payment ID']].push(allocation);
+    });
 
     const transactions = [];
-    customerTrips.forEach(trip => { const d = parseDate_(trip['Date']); if(d) transactions.push({ date: d, type: 'Invoice', reference: trip['Trip ID'], description: `${trip['Origin']} → ${trip['Destination']}`, debit: parseFloat(String(trip['Gross Income']).replace(/[^0-9.-]/g, '')) || 0, credit: 0 }); });
-    customerPayments.forEach(payment => { const d = parseDate_(payment['Payment Date']); if(d) transactions.push({ date: d, type: 'Payment', reference: payment['Payment ID'], description: payment['Notes'] || 'Payment received', debit: 0, credit: parseFloat(String(payment['Amount']).replace(/[^0-9.-]/g, '')) || 0 }); });
+    customerTrips.forEach(trip => {
+      const d = tripRecognitionDate_(trip);
+      if (d) transactions.push({ date: d, type: 'Invoice', reference: trip['Trip ID'], description: `${trip['Origin']} → ${trip['Destination']}`, debit: amountFromRecord_(trip['Gross Income']), credit: 0 });
+    });
+    customerPayments.forEach(payment => {
+      const d = parseDate_(payment['Payment Date']);
+      const allocations = allocationsByPayment[payment['Payment ID']] || [];
+      const allocated = allocations.reduce((sum, allocation) => sum + amountFromRecord_(allocation['Amount']), 0);
+      const tripRefs = allocations.map(allocation => allocation['Trip ID'] + ' (' + amountFromRecord_(allocation['Amount']).toFixed(2) + ')').join(', ');
+      const description = (payment['Notes'] || 'Payment received') + (allocated > 0
+        ? '; applied to ' + tripRefs + (allocated < amountFromRecord_(payment['Amount']) ? '; remaining amount is unapplied' : '')
+        : '; unapplied customer credit');
+      if (d) transactions.push({ date: d, type: 'Payment', reference: payment['Payment ID'], description, debit: 0, credit: amountFromRecord_(payment['Amount']) });
+    });
     transactions.sort((a, b) => a.date - b.date);
     let balance = 0; transactions.forEach(trans => { balance += trans.debit - trans.credit; trans.balance = balance; });
     return { success: true, customer, transactions, currentBalance: balance };
@@ -742,7 +863,7 @@ function generateReports_(filterType, customStartDate, customEndDate) {
 function generateProfitAndLoss_(data) {
   const analytics = data.analytics;
   return {
-    companyName: data.settings['Company Name'] || 'Reyna Trucking Business', reportTitle: 'PROFIT AND LOSS STATEMENT', periodStart: formatDate_(data.dateRange.startDate), periodEnd: formatDate_(data.dateRange.endDate),
+    companyName: data.settings['Company Name'] || 'Limars Trucking Business', reportTitle: 'PROFIT AND LOSS STATEMENT', periodStart: formatDate_(data.dateRange.startDate), periodEnd: formatDate_(data.dateRange.endDate),
     sections: [
       { title: 'REVENUE', items: [ { label: 'Total Freight Revenue (Inc. Subsidies)', amount: analytics.totalRevenue } ], total: { label: 'Total Revenue', amount: analytics.totalRevenue } },
       { title: 'COST OF SERVICES', items: [ { label: 'Direct Trip Costs (Fuel, Tolls, Driver & Helper Pay)', amount: analytics.costOfServices } ], total: { label: 'Total Cost of Services', amount: analytics.costOfServices } },
@@ -757,7 +878,7 @@ function generateProfitAndLoss_(data) {
 function generateIncomeStatement_(data) {
   const analytics = data.analytics;
   return {
-    companyName: data.settings['Company Name'] || 'Reyna Trucking Business', reportTitle: 'INCOME STATEMENT',
+    companyName: data.settings['Company Name'] || 'Limars Trucking Business', reportTitle: 'INCOME STATEMENT - MANAGEMENT SUMMARY',
     sections: [
       { title: 'REVENUE', items: [ { label: 'Gross Income', amount: analytics.totalRevenue } ], total: { label: 'Total Revenue', amount: analytics.totalRevenue } },
       { title: 'EXPENSES', items: [ { label: 'Direct Trip Costs', amount: analytics.costOfServices }, { label: 'Operating Expenses', amount: analytics.operatingExpenses } ], total: { label: 'Total Expenses', amount: analytics.costOfServices + analytics.operatingExpenses } },
@@ -767,20 +888,12 @@ function generateIncomeStatement_(data) {
 }
 
 function generateTrialBalance_(data) {
-  const analytics = data.analytics;
-  const accounts = [
-    { account: 'ASSETS', debit: 0, credit: 0, isHeader: true },
-    { account: 'Accounts Receivable', debit: analytics.totalReceivables, credit: 0 },
-    { account: 'Cash', debit: analytics.totalPaymentsReceived, credit: 0 },
-    { account: 'EQUITY', debit: 0, credit: 0, isHeader: true },
-    { account: 'Retained Earnings', debit: 0, credit: analytics.totalNetProfit },
-    { account: 'REVENUE', debit: 0, credit: 0, isHeader: true },
-    { account: 'Freight Revenue', debit: 0, credit: analytics.totalRevenue },
-    { account: 'EXPENSES', debit: 0, credit: 0, isHeader: true },
-    { account: 'Direct Trip Costs (COGS)', debit: analytics.costOfServices, credit: 0 },
-    { account: 'Operating Expenses', debit: analytics.operatingExpenses, credit: 0 }
-  ];
-  return { companyName: data.settings['Company Name'] || 'Reyna', reportTitle: 'TRIAL BALANCE', accounts: accounts, totalDebit: accounts.reduce((sum, acc) => sum + (acc.debit || 0), 0), totalCredit: accounts.reduce((sum, acc) => sum + (acc.credit || 0), 0) };
+  return {
+    available: false,
+    companyName: data.settings['Company Name'] || 'Limars',
+    reportTitle: 'TRIAL BALANCE',
+    message: 'A valid trial balance requires a complete double-entry general ledger. LIMARS currently stores operational totals rather than journal entries, so this report cannot be produced reliably.'
+  };
 }
 
 function formatDate_(dateValue) {
@@ -791,23 +904,23 @@ function formatDate_(dateValue) {
 function generateExpensesReport_(data) {
   const startDate = new Date(data.dateRange.startDate); const endDate = new Date(data.dateRange.endDate);
   const filteredExpenses = data.expenses.filter(exp => { const d = parseDate_(exp['Date']); return d && d >= startDate && d <= endDate; });
-  return { companyName: data.settings['Company Name'] || 'Reyna', reportTitle: 'EXPENSES REPORT', expenses: filteredExpenses.map(exp => ({ date: exp['Date'], expenseId: exp['Expense ID'], category: exp['Category'], description: exp['Description'], amount: parseFloat(String(exp['Amount']).replace(/[^0-9.-]/g, '')) || 0, paidBy: exp['Paid By'], paymentMethod: exp['Payment Method'] })), summary: data.analytics.expenseBreakdown, totalExpenses: data.analytics.operatingExpenses };
+  return { companyName: data.settings['Company Name'] || 'Limars', reportTitle: 'EXPENSES REPORT', expenses: filteredExpenses.map(exp => ({ date: exp['Date'], expenseId: exp['Expense ID'], category: exp['Category'], description: exp['Description'], amount: parseFloat(String(exp['Amount']).replace(/[^0-9.-]/g, '')) || 0, paidBy: exp['Paid By'], paymentMethod: exp['Payment Method'] })), summary: data.analytics.expenseBreakdown, totalExpenses: data.analytics.operatingExpenses };
 }
 
 function generateCustomerReport_(data) {
   const customerDetails = data.customers.map(customer => {
-    const customerTrips = data.trips.filter(t => t['Customer Name'] === customer['Customer Name']);
+    const customerTrips = data.trips.filter(t => t['Customer ID'] === customer['Customer ID'] && tripRecognitionDate_(t));
     const customerPayments = data.payments.filter(p => p['Customer ID'] === customer['Customer ID']);
     const totalBilled = customerTrips.reduce((sum, trip) => sum + (parseFloat(String(trip['Gross Income']).replace(/[^0-9.-]/g, '')) || 0), 0);
     const totalPaid = customerPayments.reduce((sum, payment) => sum + (parseFloat(String(payment['Amount']).replace(/[^0-9.-]/g, '')) || 0), 0);
     return { customerId: customer['Customer ID'], customerName: customer['Customer Name'], companyName: customer['Company Name'], contactNumber: customer['Contact Number'], totalTrips: customerTrips.length, totalBilled: totalBilled, totalPaid: totalPaid, balance: totalBilled - totalPaid, creditLimit: parseFloat(String(customer['Credit Limit']).replace(/[^0-9.-]/g, '')) || 0, paymentTerms: customer['Payment Terms'], status: customer['Status'] };
   });
-  return { companyName: data.settings['Company Name'] || 'Reyna', reportTitle: 'CUSTOMER REPORT', customers: customerDetails, totalCustomers: data.customers.length, activeCustomers: data.customers.filter(c => c['Status'] === 'Active').length };
+  return { companyName: data.settings['Company Name'] || 'Limars', reportTitle: 'CUSTOMER REPORT', customers: customerDetails, totalCustomers: data.customers.length, activeCustomers: data.customers.filter(c => c['Status'] === 'Active').length, unlinkedDeliveredTrips: data.trips.filter(t => t['Trip Status'] === 'Delivered' && !t['Customer ID']).length };
 }
 
 function generateDriversReport_(data) {
   const startDate = new Date(data.dateRange.startDate); const endDate = new Date(data.dateRange.endDate);
-  const filteredTrips = data.trips.filter(trip => { const d = parseDate_(trip['Date']); return d && d >= startDate && d <= endDate; });
+  const filteredTrips = data.trips.filter(trip => { const d = tripRecognitionDate_(trip); return d && d >= startDate && d <= endDate; });
   const driverDetails = data.drivers.map(driver => {
     const driverTrips = filteredTrips.filter(t => t['Driver ID'] === driver['Driver ID']);
     const totalRevenue = driverTrips.reduce((sum, trip) => sum + (parseFloat(String(trip['Gross Income']).replace(/[^0-9.-]/g, '')) || 0), 0);
@@ -815,12 +928,12 @@ function generateDriversReport_(data) {
     const estimatedPay = driverTrips.reduce((sum, trip) => sum + (parseFloat(String(trip['Driver Pay']).replace(/[^0-9.-]/g, '')) || 0), 0);
     return { driverId: driver['Driver ID'], driverName: driver['Driver Name'], licenseNumber: driver['License Number'], contactNumber: driver['Contact Number'], totalTrips: driverTrips.length, totalRevenue: totalRevenue, totalProfit: totalProfit, estimatedPay: estimatedPay, avgRevenuePerTrip: driverTrips.length > 0 ? (totalRevenue / driverTrips.length) : 0, status: driver['Status'] };
   });
-  return { companyName: data.settings['Company Name'] || 'Reyna', reportTitle: 'DRIVERS PERFORMANCE REPORT', drivers: driverDetails, totalDrivers: data.drivers.length, activeDrivers: data.drivers.filter(d => d['Status'] === 'Active').length };
+  return { companyName: data.settings['Company Name'] || 'Limars', reportTitle: 'DRIVERS PERFORMANCE REPORT', drivers: driverDetails, totalDrivers: data.drivers.length, activeDrivers: data.drivers.filter(d => d['Status'] === 'Active').length };
 }
 
 function generateAccountsReceivableReport_(data) {
   return {
-    companyName: data.settings['Company Name'] || 'Reyna', reportTitle: 'ACCOUNTS RECEIVABLE REPORT',
+    companyName: data.settings['Company Name'] || 'Limars', reportTitle: 'ACCOUNTS RECEIVABLE REPORT',
     receivables: data.analytics.accountReceivables.map(ar => ({ customerId: ar.customerId, customerName: ar.customerName, totalBilled: ar.totalBilled, totalPaid: ar.totalPaid, balance: ar.balance, creditLimit: ar.creditLimit, paymentTerms: ar.paymentTerms, utilizationPercent: ar.creditLimit > 0 ? ((ar.balance / ar.creditLimit) * 100).toFixed(2) : 0 })),
     totalReceivables: data.analytics.totalReceivables, totalBilled: data.analytics.accountReceivables.reduce((sum, ar) => sum + ar.totalBilled, 0), totalPaid: data.analytics.accountReceivables.reduce((sum, ar) => sum + ar.totalPaid, 0)
   };
@@ -831,9 +944,18 @@ function generatePaymentsReport_(data) {
   const filteredPayments = data.payments.filter(payment => { const d = parseDate_(payment['Payment Date']); return d && d >= startDate && d <= endDate; });
   const paymentsByMethod = {};
   filteredPayments.forEach(payment => { const method = payment['Payment Method'] || 'Cash'; const amount = parseFloat(String(payment['Amount']).replace(/[^0-9.-]/g, '')) || 0; paymentsByMethod[method] = (paymentsByMethod[method] || 0) + amount; });
+  const allocationsByPayment = {};
+  (data.paymentAllocations || []).forEach(function (allocation) {
+    if (!allocationsByPayment[allocation['Payment ID']]) allocationsByPayment[allocation['Payment ID']] = [];
+    allocationsByPayment[allocation['Payment ID']].push(allocation);
+  });
   return {
-    companyName: data.settings['Company Name'] || 'Reyna', reportTitle: 'PAYMENTS RECEIVED REPORT',
-    payments: filteredPayments.map(payment => ({ paymentId: payment['Payment ID'], paymentDate: payment['Payment Date'], customerId: payment['Customer ID'], customerName: payment['Customer Name'], amount: parseFloat(String(payment['Amount']).replace(/[^0-9.-]/g, '')) || 0, paymentMethod: payment['Payment Method'], referenceNumber: payment['Reference Number'], notes: payment['Notes'] })),
+    companyName: data.settings['Company Name'] || 'Limars', reportTitle: 'PAYMENTS RECEIVED REPORT',
+    payments: filteredPayments.map(payment => {
+      const allocations = allocationsByPayment[payment['Payment ID']] || [];
+      const applied = allocations.reduce((sum, allocation) => sum + amountFromRecord_(allocation['Amount']), 0);
+      return { paymentId: payment['Payment ID'], paymentDate: payment['Payment Date'], customerId: payment['Customer ID'], customerName: payment['Customer Name'], amount: amountFromRecord_(payment['Amount']), paymentMethod: payment['Payment Method'], referenceNumber: payment['Reference Number'], notes: payment['Notes'], appliedTrips: allocations.map(allocation => allocation['Trip ID'] + ' (₱' + amountFromRecord_(allocation['Amount']).toFixed(2) + ')').join(', '), unappliedAmount: Math.max(0, amountFromRecord_(payment['Amount']) - applied) };
+    }),
     totalPayments: data.analytics.totalPaymentsReceived, paymentsByMethod: paymentsByMethod, totalTransactions: filteredPayments.length
   };
 }
@@ -855,10 +977,23 @@ function deleteTripFromServer_(tripId) {
 
 function updateTripInServer_(tripData) {
   try {
-    const t = normalizeTrip_(tripData || {});
-    if (!txt_(t.tripId)) return { success: false, error: 'Trip ID is missing.' };
-    const existingTrip = getTableData_(SHEETS.TRIPS, 'trip_id=' + eq_(t.tripId))[0];
-    if (!existingTrip) return { success: false, error: 'Trip ID ' + t.tripId + ' not found.' };
+    const input = tripData || {};
+    const tripId = txt_(input.tripId);
+    if (!tripId) return { success: false, error: 'Trip ID is missing.' };
+    const existingTrip = getTableData_(SHEETS.TRIPS, 'trip_id=' + eq_(tripId))[0];
+    if (!existingTrip) return { success: false, error: 'Trip ID ' + tripId + ' not found.' };
+    const t = normalizeTrip_(input, existingTrip);
+    const customer = getTableData_(SHEETS.CUSTOMERS, 'customer_id=' + eq_(t.customerId))[0];
+    if (!customer) return { success: false, error: 'Select a valid customer.' };
+    t.customerName = customer['Customer Name'];
+    const existingAllocations = getTableData_(SHEETS.PAYMENT_ALLOCATIONS, 'trip_id=' + eq_(tripId));
+    const appliedAmount = existingAllocations.reduce((sum, allocation) => sum + amountFromRecord_(allocation['Amount']), 0);
+    if (appliedAmount > 0 && txt_(existingTrip['Customer ID']) !== txt_(t.customerId)) {
+      return { success: false, error: 'This trip has payments applied and cannot be reassigned to another customer.' };
+    }
+    if (appliedAmount - t.grossIncome > 0.005) {
+      return { success: false, error: 'The revised invoice amount cannot be lower than payments already applied to this trip.' };
+    }
     delete t.tripStatus;
     delete t.statusUpdatedAt;
     delete t.statusUpdatedBy;
@@ -907,8 +1042,13 @@ function updateAssignedTripStatus_(tripId, status, note, receivedBy, proof) {
     const trip = getTableData_(SHEETS.TRIPS, 'trip_id=' + eq_(tripId))[0];
     if (!trip) return { success: false, error: 'Trip not found.' };
     assertDriverTripAccess_(trip, true);
+    const existingAllocations = getTableData_(SHEETS.PAYMENT_ALLOCATIONS, 'trip_id=' + eq_(tripId));
+    if (existingAllocations.length && status !== 'Delivered') {
+      return { success: false, error: 'This delivered invoice has payment allocations and cannot be moved back to an active status.' };
+    }
 
     const now = new Date().toISOString();
+    const deliveredAt = status === 'Delivered' ? (trip['Delivered At'] || now) : null;
     if (status === 'Delivered') {
       if (proof.photo && proof.photo.data) photoPath = storeDriverProofFile_(tripId, proof.photo, 'photo');
       if (proof.signatureData) {
@@ -924,7 +1064,7 @@ function updateAssignedTripStatus_(tripId, status, note, receivedBy, proof) {
       status_updated_by: session.u,
       status_note: note,
       received_by: status === 'Delivered' ? (receivedBy || 'Signature on file') : '',
-      delivered_at: status === 'Delivered' ? now : null
+      delivered_at: deliveredAt
     };
     if (status === 'Delivered') {
       change.pod_confirmed = true;
@@ -961,7 +1101,7 @@ function updateAssignedTripStatus_(tripId, status, note, receivedBy, proof) {
       return {
         success: true,
         status: status,
-        deliveredAt: status === 'Delivered' ? now : null,
+        deliveredAt: deliveredAt,
         warning: 'Trip status was saved, but its history record could not be saved.' +
           (locationWarning ? ' ' + locationWarning : '')
       };
@@ -970,7 +1110,7 @@ function updateAssignedTripStatus_(tripId, status, note, receivedBy, proof) {
     return {
       success: true,
       status: status,
-      deliveredAt: status === 'Delivered' ? now : null,
+      deliveredAt: deliveredAt,
       warning: locationWarning
     };
   } catch (error) {
@@ -1209,6 +1349,7 @@ const API_WHITELIST_ = {
   addCustomer: addCustomer_,
   addExpense: addExpense_,
   addPayment: addPayment_,
+  applyExistingPayment: applyExistingPayment_,
   addTrip: addTrip_,
   updateTripInServer: updateTripInServer_,
   updateAssignedTripStatus: updateAssignedTripStatus_,
@@ -1235,7 +1376,7 @@ let CURRENT_SESSION_ = null;   // the signed-in user for the request currently b
 /** Serves the login page (nothing else is reachable without signing in). */
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('Login')
-    .setTitle('Sign In | LIMARS Tracker')
+    .setTitle('Sign In | LIMARS Trucking')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 

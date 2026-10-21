@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sign In | LIMARS Tracker</title>
+  <title>Sign In | LIMARS Trucking</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -39,9 +39,10 @@
     }
     .brand { display: flex; align-items: center; gap: 12px; position: relative; z-index: 1; }
     .brand-mark {
-      width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; font-size: 19px; font-weight: 800;
-      background: linear-gradient(135deg, #3b82f6, var(--accent)); box-shadow: 0 4px 12px rgba(37, 99, 235, .4);
+      width: 70px; height: 70px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+      background: transparent; box-shadow: none; border-radius: 0;
     }
+    .brand-mark img { display: block; width: 100%; height: 100%; object-fit: contain; }
     .brand-name { font-size: 18px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
     .brand-copy { position: relative; z-index: 1; }
     .brand-copy h2 { font-size: 26px; font-weight: 700; line-height: 1.25; letter-spacing: -.01em; margin-bottom: 12px; }
@@ -94,8 +95,12 @@
   <main class="login-shell">
     <section class="brand-panel">
       <div class="brand">
-        <div class="brand-mark">L</div>
-        <div class="brand-name">LIMARS Tracker</div>
+        <div class="brand-mark">
+          <img
+            src="https://lh3.googleusercontent.com/d/1hfAaPJrsS1bltZtPH1MxyA54QdnH0ERg"
+            alt="LIMARS Trucking Logo">
+        </div>
+        <div class="brand-name">LIMARS Trucking</div>
       </div>
       <div class="brand-copy">
         <h2>Trucking operations and finances in one place.</h2>

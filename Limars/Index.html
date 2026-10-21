@@ -63,7 +63,7 @@
   <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Reyna Advanced Tracker - Enhanced Edition</title>
+  <title>LIMARS Trucking</title>
   
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -557,7 +557,9 @@
     .driver-trip-status { min-width: 180px; }
     .driver-dashboard .chart-container { margin-top: 18px; padding: 22px; }
     .driver-dashboard .data-table { min-width: 760px; }
-    .driver-table-scroll { overflow-x: auto; }
+    .driver-table-scroll { overflow-x: auto; border:1px solid var(--line); border-radius:var(--radius-sm); }
+    .driver-table-scroll.is-scrollable { max-height: 360px; overflow: auto; }
+    .driver-table-scroll.is-scrollable .data-table th { position: sticky; top: 0; z-index: 2; }
     .driver-signature { display: block; width: 100%; max-width: 520px; height: 150px; touch-action: none; border: 1px solid var(--line-2); border-radius: 8px; background: #fff; }
     .driver-profile-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(190px,1fr)); gap: 14px; }
     .driver-profile-item { background: var(--navy-50); padding: 12px; border-radius: 8px; }
@@ -571,13 +573,72 @@
     .driver-page.active, .trip-panel.active { display:block; }
     .driver-overview-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px; margin-top:20px; }
     body.driver-mode .driver-dashboard { max-width:1200px; }
+
+    .header {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 14px 24px;
+      background: #fff;
+      border-bottom: 1px solid var(--line);
+      min-width: 0;
+    }
+    .brand { display:flex; align-items:center; gap:16px; flex:0 1 auto; min-width:0; }
+    .header-logo { display:block; width:100px; height:100px; object-fit:contain; flex-shrink:0; }
+    .header-brand-text { min-width:0; }
+    .header-brand-text h1 {
+      margin:0; font-size:22px; line-height:1.3; font-weight:800; color:var(--navy-900);
+    }
+    .header-brand-text p { margin:5px 0 0; max-width:430px; font-size:12px; line-height:1.4; color:var(--muted); }
+    .header .filter-bar {
+      display:flex; flex:0 1 auto; flex-wrap:wrap; align-items:center; justify-content:flex-end;
+      gap:6px; margin:0; padding:0; border:0;
+    }
+    @media (max-width: 1000px) {
+      .header { flex-wrap:wrap; }
+      .header .filter-bar { justify-content:flex-start; }
+    }
+    @media (max-width: 600px) {
+      .header { padding:14px 16px; }
+      .header-logo { width:68px; height:68px; }
+      .header-brand-text h1 { font-size:18px; }
+    }
+
+    [id$="TableContainer"] { max-height:460px; overflow:auto; }
+    [id$="TableContainer"] .data-table { margin-top:0; }
+    [id$="TableContainer"] .data-table th { position:sticky; top:0; z-index:2; }
+    .payment-allocation-scroll {
+      max-height:360px; overflow:auto; border:1px solid var(--line); border-radius:var(--radius-sm);
+    }
+    .driver-table-scroll .data-table, .payment-allocation-scroll .data-table { margin-top:0; }
+    .driver-table-scroll .data-table th, .payment-allocation-scroll .data-table th {
+      position:sticky; top:0; z-index:2;
+    }
+    .existing-payment-details {
+      margin-top:24px; padding:18px 20px; border:1px solid var(--line); border-radius:var(--radius-sm); background:#fff;
+    }
+    .existing-payment-details summary {
+      color:var(--navy-900); font-weight:700; cursor:pointer;
+    }
+    .existing-payment-details[open] summary { margin-bottom:14px; }
+    .existing-payment-details .form-container { margin:0; padding:0; border:0; box-shadow:none; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <h1>LIMARS TRACKER</h1>
-      <p>Complete Trucking Business Management System - Enhanced Edition with BIR Invoicing</p>
+      <div class="brand">
+        <img
+          src="https://lh3.googleusercontent.com/d/1hfAaPJrsS1bltZtPH1MxyA54QdnH0ERg"
+          alt="LIMARS Logo"
+          class="header-logo">
+        <div class="header-brand-text">
+          <h1>LIMARS TRUCKING</h1>
+          <p>Complete Trucking Business Management System - Enhanced Edition with BIR Invoicing</p>
+        </div>
+      </div>
       
       <div class="filter-bar">
         <label>Filter Period:</label>
@@ -635,10 +696,19 @@
           <h1 style="color:var(--navy-900);font-size:23px;">Driver Trip Dashboard</h1>
           <p id="driverWelcome" style="color:var(--muted);margin-top:4px;"></p>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button type="button" class="btn btn-secondary" onclick="usrOpenChangePw()">Change password</button>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <button type="button" class="btn btn-secondary" onclick="loadDriverDashboard()">Refresh</button>
-          <button type="button" class="btn btn-secondary" onclick="signOut()">Sign out</button>
+          <div class="acct" id="driverAcct">
+            <button type="button" class="nav-tab acct-trigger" id="driverAcctBtn" onclick="usrToggleMenu(event, 'driverAcct')" aria-haspopup="true" aria-expanded="false">
+              <span class="acct-avatar" id="driverAcctAvatar"></span><span class="acct-name" id="driverAcctName"></span><span class="acct-caret"></span>
+            </button>
+            <div class="acct-menu" id="driverAcctMenu" role="menu">
+              <div class="acct-head"><div class="acct-head-name" id="driverAcctHeadName"></div><div class="acct-head-sub" id="driverAcctHeadSub"></div></div>
+              <button type="button" class="acct-item" role="menuitem" onclick="usrCloseMenu('driverAcct'); usrOpenChangePw()">Change Password</button>
+              <div class="acct-sep"></div>
+              <button type="button" class="acct-item danger" role="menuitem" onclick="usrCloseMenu('driverAcct'); signOut()">Sign Out</button>
+            </div>
+          </div>
         </div>
       </div>
       <nav class="driver-nav-tabs" aria-label="Driver dashboard navigation">
@@ -1054,11 +1124,12 @@
     <!-- Payments Section -->
     <div id="payments" class="content-section">
       <div class="form-container">
-        <h2 style="color: var(--primary-red); margin-bottom: 20px;">Record Payment</h2>
+        <h2 style="color: var(--primary-red); margin-bottom: 8px;">Record a New Payment</h2>
+        <p class="usr-note">Enter a payment that has just been received. To apply a payment already recorded earlier, expand the section below.</p>
         <div class="form-grid">
           <div class="form-group">
             <label>Customer</label>
-            <select id="paymentCustomer" required onchange="updateCustomerBalance()">
+            <select id="paymentCustomer" required onchange="updateCustomerBalance(); renderPaymentAllocations();">
               <option value="">Select Customer</option>
             </select>
           </div>
@@ -1068,7 +1139,7 @@
           </div>
           <div class="form-group">
             <label>Amount (₱)</label>
-            <input type="number" id="paymentAmount" step="0.01" required>
+            <input type="number" id="paymentAmount" step="0.01" min="0.01" required oninput="updateCustomerBalance()">
           </div>
           <div class="form-group">
             <label>Payment Method</label>
@@ -1096,11 +1167,29 @@
           </div>
         </div>
         <div class="form-group">
+          <label>Apply Payment to Delivered Trips (optional)</label>
+          <p class="usr-note">Leave an amount blank to keep that portion as unapplied customer credit. Allocations cannot exceed an invoice's remaining balance or the payment amount.</p>
+          <div id="paymentAllocationsContainer"></div>
+        </div>
+        <div class="form-group">
           <label>Notes</label>
           <textarea id="paymentNotes" rows="3"></textarea>
         </div>
         <button class="btn btn-primary" onclick="addPayment()">Record Payment</button>
       </div>
+      <details class="existing-payment-details">
+        <summary>Apply a previously recorded payment to invoices</summary>
+        <p class="usr-note">Choose an earlier payment and apply its remaining amount to delivered invoices. This does not create another payment; any unused amount stays as customer credit.</p>
+        <div class="form-group">
+          <label for="existingPaymentSelect">Previously recorded payment</label>
+          <select id="existingPaymentSelect" onchange="renderExistingPaymentAllocations()">
+            <option value="">Select an unapplied payment</option>
+          </select>
+        </div>
+        <div id="existingPaymentAllocationInfo" class="usr-note"></div>
+        <div id="existingPaymentAllocationsContainer"></div>
+        <button class="btn btn-primary" type="button" onclick="applyExistingPayment()">Apply Selected Amounts</button>
+      </details>
       <div class="chart-container" style="margin-top: 30px;">
         <h2>Account Receivables</h2>
         <div id="receivablesTableContainer"></div>
@@ -1414,9 +1503,56 @@ window.onload = function() {
     document.body.classList.add('driver-mode');
     document.getElementById('driverWelcome').textContent = 'Welcome, ' + (window.__USER__.fullName || 'Driver') + '. Manage assignments, delivery proof, and dispatch incident reports.';
   }
+  restoreDashboardView();
   loadData();
   setTodayDates();
 };
+
+function dashboardViewStorageKey() {
+  const username = (window.__USER__ && window.__USER__.username) || 'unknown';
+  return 'limars_dashboard_view:' + username.toLowerCase();
+}
+
+function readDashboardView() {
+  try {
+    return JSON.parse(sessionStorage.getItem(dashboardViewStorageKey()) || '{}') || {};
+  } catch (error) {
+    console.warn('Could not restore the last dashboard tab.', error);
+    return {};
+  }
+}
+
+function saveDashboardView(view) {
+  try {
+    sessionStorage.setItem(dashboardViewStorageKey(), JSON.stringify(view));
+  } catch (error) {
+    console.warn('Could not save the current dashboard tab.', error);
+  }
+}
+
+function currentDashboardView() {
+  return {
+    section: document.querySelector('.content-section.active')?.id || 'dashboard',
+    tripPanel: document.querySelector('.trip-panel.active')?.id.replace('tripPanel', '').toLowerCase() || 'history',
+    driverPage: document.querySelector('.driver-page.active')?.id.replace('driverPage', '').toLowerCase() || 'overview'
+  };
+}
+
+function restoreDashboardView() {
+  const view = readDashboardView();
+  if (window.__USER__ && window.__USER__.role === 'driver') {
+    if (document.querySelector('.driver-nav-tab[data-driver-page="' + view.driverPage + '"]')) {
+      showDriverPage(view.driverPage);
+    }
+    return;
+  }
+  if (view.section && document.getElementById(view.section) && document.getElementById(view.section).classList.contains('content-section')) {
+    showSection(view.section);
+  }
+  if (view.tripPanel && document.querySelector('.trip-nav-tab[data-trip-panel="' + view.tripPanel + '"]')) {
+    showTripPanel(view.tripPanel);
+  }
+}
 
 function setTodayDates() {
   const today = new Date().toISOString().split('T')[0];
@@ -1451,34 +1587,42 @@ function applyCustomFilter() {
 }
 
 function showSection(sectionId) {
+  const section = document.getElementById(sectionId);
+  if (!section || !section.classList.contains('content-section')) return;
   document.querySelectorAll('.content-section').forEach(section => section.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
-  document.getElementById(sectionId).classList.add('active');
-  event.target.classList.add('active');
-  if (sectionId === 'trips') showTripPanel('history');
+  section.classList.add('active');
+  const sectionTab = Array.from(document.querySelectorAll('.nav-tabs > .nav-tab'))
+    .find(tab => tab.getAttribute('onclick') === "showSection('" + sectionId + "')");
+  if (sectionTab) sectionTab.classList.add('active');
   syncEmployeeLocationPolling(sectionId === 'trips' && document.getElementById('tripPanelTracking').classList.contains('active'));
   if (sectionId === 'reports' && Object.keys(currentReports).length === 0) {
     generateAllReports();
   }
+  saveDashboardView(currentDashboardView());
 }
 
 function showTripPanel(panelName) {
+  const panel = document.getElementById('tripPanel' + panelName.charAt(0).toUpperCase() + panelName.slice(1));
+  if (!panel) return;
   document.querySelectorAll('.trip-panel').forEach(function(panel) { panel.classList.remove('active'); });
   document.querySelectorAll('.trip-nav-tab').forEach(function(tab) { tab.classList.remove('active'); });
-  const panel = document.getElementById('tripPanel' + panelName.charAt(0).toUpperCase() + panelName.slice(1));
-  if (panel) panel.classList.add('active');
+  panel.classList.add('active');
   const tab = document.querySelector('.trip-nav-tab[data-trip-panel="' + panelName + '"]');
   if (tab) tab.classList.add('active');
   syncEmployeeLocationPolling(panelName === 'tracking' && document.getElementById('trips').classList.contains('active'));
+  saveDashboardView(currentDashboardView());
 }
 
 function showDriverPage(pageName) {
+  const page = document.getElementById('driverPage' + pageName.charAt(0).toUpperCase() + pageName.slice(1));
+  if (!page) return;
   document.querySelectorAll('.driver-page').forEach(function(page) { page.classList.remove('active'); });
   document.querySelectorAll('.driver-nav-tab').forEach(function(tab) { tab.classList.remove('active'); });
-  const page = document.getElementById('driverPage' + pageName.charAt(0).toUpperCase() + pageName.slice(1));
-  if (page) page.classList.add('active');
+  page.classList.add('active');
   const tab = document.querySelector('.driver-nav-tab[data-driver-page="' + pageName + '"]');
   if (tab) tab.classList.add('active');
+  saveDashboardView(currentDashboardView());
 }
 
 function loadData(filterType, customStart, customEnd) {
@@ -1528,7 +1672,7 @@ function addTruckRow() {
   if(globalData.trucks) {
     globalData.trucks.forEach(truck => {
       const off = !resIsAvailable(truck['Status']);
-      truckOptions += `<option value="${truck['Plate Number']}" data-plate="${truck['Plate Number']}"${off ? ' disabled' : ''}>${truck['Plate Number']} - ${truck['Model/Type']}${off ? ' (' + truck['Status'] + ')' : ''}</option>`;
+      truckOptions += `<option value="${escapeHtml(truck['Plate Number'])}" data-plate="${escapeHtml(truck['Plate Number'])}"${off ? ' disabled' : ''}>${escapeHtml(truck['Plate Number'])} - ${escapeHtml(truck['Model/Type'])}${off ? ' (' + escapeHtml(truck['Status']) + ')' : ''}</option>`;
     });
   }
 
@@ -1551,7 +1695,7 @@ function addHelperRow() {
   if(globalData.helpers) {
     globalData.helpers.forEach(helper => {
       const off = !resIsAvailable(helper['Status']);
-      helperOptions += `<option value="${helper['Helper Name']}" data-rate="${helper['Default Rate']}"${off ? ' disabled' : ''}>${helper['Helper Name']}${off ? ' (' + helper['Status'] + ')' : ''}</option>`;
+      helperOptions += `<option value="${escapeHtml(helper['Helper Name'])}" data-rate="${escapeHtml(helper['Default Rate'])}"${off ? ' disabled' : ''}>${escapeHtml(helper['Helper Name'])}${off ? ' (' + escapeHtml(helper['Status']) + ')' : ''}</option>`;
     });
   }
 
@@ -1617,15 +1761,19 @@ function displayCreditors(creditors) {
   }
   let html = '';
   creditors.forEach(creditor => {
-    html += `<div class="creditor-item" onclick="viewStatement('${creditor.customerId}')">
+    html += `<div class="creditor-item" data-customer-id="${escapeHtml(creditor.customerId)}">
                <div>
-                 <div class="creditor-name">${creditor.customerName}</div>
+                 <div class="creditor-name">${escapeHtml(creditor.customerName)}</div>
                  <div class="creditor-details">Billed: ₱${parseFloat(creditor.totalBilled).toLocaleString('en-PH',{minimumFractionDigits:2})} | Paid: ₱${parseFloat(creditor.totalPaid).toLocaleString('en-PH',{minimumFractionDigits:2})}</div>
                </div>
                <div class="creditor-balance">₱${parseFloat(creditor.balance).toLocaleString('en-PH',{minimumFractionDigits:2})}</div>
              </div>`;
   });
   container.innerHTML = html;
+  container.onclick = function(event) {
+    const creditor = event.target.closest('.creditor-item[data-customer-id]');
+    if (creditor) viewStatement(creditor.dataset.customerId);
+  };
 }
 
 function createMonthlyTrendChart(trends) {
@@ -1762,17 +1910,172 @@ function updateCustomerBalance() {
   }
   const balance = currentCustomerBalances[customerId] || 0;
   const paymentAmount = parseFloat(amountInput.value) || 0;
+  const allocatedAmount = Array.prototype.reduce.call(
+    document.querySelectorAll('.payment-allocation-amount'),
+    function (sum, input) { return sum + (parseFloat(input.value) || 0); },
+    0
+  );
   const balanceAfter = balance - paymentAmount;
   
   document.getElementById('currentBalance').textContent = '₱' + balance.toLocaleString('en-PH', {minimumFractionDigits: 2});
-  document.getElementById('balanceAfterPayment').textContent = '₱' + balanceAfter.toLocaleString('en-PH', {minimumFractionDigits: 2});
+  document.getElementById('balanceAfterPayment').textContent =
+    '₱' + balanceAfter.toLocaleString('en-PH', {minimumFractionDigits: 2}) +
+    (allocatedAmount > paymentAmount ? ' (allocated amount exceeds payment)' : '');
   document.getElementById('customerBalanceInfo').style.display = 'block';
-  
-  amountInput.oninput = function() {
-    const newPayment = parseFloat(this.value) || 0;
-    const newBalance = balance - newPayment;
-    document.getElementById('balanceAfterPayment').textContent = '₱' + newBalance.toLocaleString('en-PH', {minimumFractionDigits: 2});
-  };
+}
+
+function renderPaymentAllocations() {
+  const container = document.getElementById('paymentAllocationsContainer');
+  if (!container) return;
+  const customerId = document.getElementById('paymentCustomer').value;
+  if (!customerId) {
+    container.innerHTML = '<p class="usr-note">Select a customer to see delivered invoices with an outstanding balance.</p>';
+    return;
+  }
+  const allocatedByTrip = {};
+  (globalData.paymentAllocations || []).forEach(function (allocation) {
+    const tripId = allocation['Trip ID'];
+    allocatedByTrip[tripId] = (allocatedByTrip[tripId] || 0) + (parseFloat(allocation['Amount']) || 0);
+  });
+  const invoices = (globalData.trips || []).filter(function (trip) {
+    return trip['Customer ID'] === customerId && trip['Trip Status'] === 'Delivered';
+  }).map(function (trip) {
+    const gross = parseFloat(trip['Gross Income']) || 0;
+    const remaining = Math.max(0, gross - (allocatedByTrip[trip['Trip ID']] || 0));
+    return { trip: trip, remaining: remaining };
+  }).filter(function (item) { return item.remaining > 0.005; });
+  if (!invoices.length) {
+    container.innerHTML = '<p class="usr-note">No delivered invoices have an outstanding amount.</p>';
+    return;
+  }
+  let html = '<div class="payment-allocation-scroll"><table class="data-table"><thead><tr><th>Invoice</th><th>Delivered</th><th>Route</th><th>Remaining</th><th>Apply</th></tr></thead><tbody>';
+  invoices.forEach(function (item) {
+    const trip = item.trip;
+    html += '<tr><td>' + escapeHtml(trip['Trip ID']) + '</td><td>' +
+      escapeHtml(formatDriverDate(trip['Delivered At'] || trip['Date'])) + '</td><td>' +
+      escapeHtml((trip['Origin'] || '-') + ' to ' + (trip['Destination'] || '-')) +
+      '</td><td>₱' + item.remaining.toLocaleString('en-PH', {minimumFractionDigits: 2}) +
+      '</td><td><input type="number" class="payment-allocation-amount" data-trip-id="' +
+      escapeHtml(trip['Trip ID']) + '" max="' + item.remaining.toFixed(2) +
+      '" min="0" step="0.01" aria-label="Amount to apply to ' + escapeHtml(trip['Trip ID']) +
+      '" oninput="updateCustomerBalance()"></td></tr>';
+  });
+  container.innerHTML = html + '</tbody></table></div>';
+}
+
+function populateExistingPaymentOptions(data) {
+  const select = document.getElementById('existingPaymentSelect');
+  if (!select) return;
+  select.innerHTML = '<option value="">Select an unapplied payment</option>';
+  const appliedByPayment = {};
+  (data.paymentAllocations || []).forEach(function (allocation) {
+    const paymentId = allocation['Payment ID'];
+    appliedByPayment[paymentId] = (appliedByPayment[paymentId] || 0) + (parseFloat(allocation['Amount']) || 0);
+  });
+  (data.payments || []).forEach(function (payment) {
+    const amount = parseFloat(payment['Amount']) || 0;
+    const remaining = Math.max(0, amount - (appliedByPayment[payment['Payment ID']] || 0));
+    if (remaining <= 0.005) return;
+    const option = document.createElement('option');
+    option.value = payment['Payment ID'];
+    option.dataset.customerId = payment['Customer ID'];
+    option.dataset.remaining = remaining.toFixed(2);
+    option.textContent = payment['Payment ID'] + ' — ' + payment['Customer Name'] + ' — unapplied ₱' +
+      remaining.toLocaleString('en-PH', {minimumFractionDigits: 2});
+    select.appendChild(option);
+  });
+  renderExistingPaymentAllocations();
+}
+
+function renderExistingPaymentAllocations() {
+  const select = document.getElementById('existingPaymentSelect');
+  const container = document.getElementById('existingPaymentAllocationsContainer');
+  const info = document.getElementById('existingPaymentAllocationInfo');
+  if (!select || !container || !info) return;
+  const option = select.options[select.selectedIndex];
+  const customerId = option && option.dataset.customerId;
+  const paymentRemaining = option ? (parseFloat(option.dataset.remaining) || 0) : 0;
+  if (!select.value || !customerId) {
+    info.textContent = '';
+    container.innerHTML = '<p class="usr-note">Select a payment to see eligible invoices.</p>';
+    return;
+  }
+  info.textContent = 'Unapplied payment balance: ' + formatCurrency(paymentRemaining);
+  const allocatedByTrip = {};
+  (globalData.paymentAllocations || []).forEach(function (allocation) {
+    const tripId = allocation['Trip ID'];
+    allocatedByTrip[tripId] = (allocatedByTrip[tripId] || 0) + (parseFloat(allocation['Amount']) || 0);
+  });
+  const invoices = (globalData.trips || []).filter(function (trip) {
+    return trip['Customer ID'] === customerId && trip['Trip Status'] === 'Delivered';
+  }).map(function (trip) {
+    return { trip: trip, remaining: Math.max(0, (parseFloat(trip['Gross Income']) || 0) - (allocatedByTrip[trip['Trip ID']] || 0)) };
+  }).filter(function (item) { return item.remaining > 0.005; });
+  if (!invoices.length) {
+    container.innerHTML = '<p class="usr-note">No delivered invoices have an outstanding amount.</p>';
+    return;
+  }
+  let html = '<div class="payment-allocation-scroll"><table class="data-table"><thead><tr><th>Invoice</th><th>Delivered</th><th>Route</th><th>Remaining</th><th>Apply</th></tr></thead><tbody>';
+  invoices.forEach(function (item) {
+    const trip = item.trip;
+    html += '<tr><td>' + escapeHtml(trip['Trip ID']) + '</td><td>' +
+      escapeHtml(formatDriverDate(trip['Delivered At'] || trip['Date'])) + '</td><td>' +
+      escapeHtml((trip['Origin'] || '-') + ' to ' + (trip['Destination'] || '-')) +
+      '</td><td>₱' + item.remaining.toLocaleString('en-PH', {minimumFractionDigits: 2}) +
+      '</td><td><input type="number" class="existing-payment-allocation-amount" data-trip-id="' +
+      escapeHtml(trip['Trip ID']) + '" max="' + item.remaining.toFixed(2) +
+      '" min="0" step="0.01" aria-label="Amount to apply to ' + escapeHtml(trip['Trip ID']) +
+      '" oninput="updateExistingPaymentAllocationTotal()"></td></tr>';
+  });
+  container.innerHTML = html + '</tbody></table></div>';
+}
+
+function updateExistingPaymentAllocationTotal() {
+  const select = document.getElementById('existingPaymentSelect');
+  const option = select.options[select.selectedIndex];
+  const allowed = option ? (parseFloat(option.dataset.remaining) || 0) : 0;
+  const total = Array.prototype.reduce.call(
+    document.querySelectorAll('.existing-payment-allocation-amount'),
+    function (sum, input) { return sum + (parseFloat(input.value) || 0); },
+    0
+  );
+  document.getElementById('existingPaymentAllocationInfo').textContent =
+    'Unapplied payment balance: ' + formatCurrency(allowed) +
+    ' | Selected invoice allocations: ' + formatCurrency(total) +
+    (total > allowed + 0.005 ? ' (exceeds available payment)' : '');
+}
+
+function applyExistingPayment() {
+  const paymentId = document.getElementById('existingPaymentSelect').value;
+  const allocations = Array.prototype.map.call(
+    document.querySelectorAll('.existing-payment-allocation-amount'),
+    function (input) { return { tripId: input.dataset.tripId, amount: parseFloat(input.value) || 0 }; }
+  ).filter(function (allocation) { return allocation.amount > 0; });
+  if (!paymentId || !allocations.length) {
+    showAlert('Select an existing payment and enter at least one allocation.', 'error');
+    return;
+  }
+  const total = allocations.reduce(function (sum, allocation) { return sum + allocation.amount; }, 0);
+  const option = document.getElementById('existingPaymentSelect').options[
+    document.getElementById('existingPaymentSelect').selectedIndex
+  ];
+  if (total - (parseFloat(option.dataset.remaining) || 0) > 0.005) {
+    showAlert('Invoice allocations cannot exceed this payment’s unapplied balance.', 'error');
+    return;
+  }
+  showLoading(true);
+  google.script.run.withSuccessHandler(function (result) {
+    showLoading(false);
+    if (!result || !result.success) {
+      showAlert('Could not apply payment: ' + ((result && result.error) || 'Please try again.'), 'error');
+      return;
+    }
+    showAlert('Payment applied to the selected invoices.', 'success');
+    loadData();
+  }).withFailureHandler(function (error) {
+    showLoading(false);
+    showAlert('Could not apply payment: ' + ((error && error.message) || error), 'error');
+  }).applyExistingPayment(paymentId, allocations);
 }
 
 function populateTables(data) {
@@ -1790,6 +2093,7 @@ function populateTables(data) {
   if(data.analytics && data.analytics.accountReceivables) {
     createReceivablesTable(data.analytics.accountReceivables);
   }
+  populateExistingPaymentOptions(data);
 }
 
 function createTripsTableWithInvoice(containerId, trips) {
@@ -1811,17 +2115,17 @@ function createTripsTableWithInvoice(containerId, trips) {
     const vatStatus = trip['Vat Status'] || 'NON-VAT';
 
     html += `<tr>
-      <td>${tripDate}</td>
-      <td>${trip['Customer Name']}</td>
-      <td>${trip['Origin']} → ${trip['Destination']}</td>
+      <td>${escapeHtml(tripDate)}</td>
+      <td>${escapeHtml(trip['Customer Name'])}</td>
+      <td>${escapeHtml(trip['Origin'])} → ${escapeHtml(trip['Destination'])}</td>
       <td>${escapeHtml(trip['Trip Status'] || 'Scheduled')} <button class="invoice-btn" data-action="history" data-trip-id="${escapeHtml(trip['Trip ID'])}">History</button>
         ${(trip['POD Photo Path'] || trip['POD Signature Path']) ? `<button class="invoice-btn" data-action="proof" data-trip-id="${escapeHtml(trip['Trip ID'])}">View POD</button>` : ''}</td>
       <td style="font-weight: bold;">₱${grossIncome.toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
-      <td><span class="badge ${vatStatus === 'VAT' ? 'bg-success' : 'bg-secondary'}">${vatStatus}</span></td>
+      <td><span class="badge ${vatStatus === 'VAT' ? 'bg-success' : 'bg-secondary'}">${escapeHtml(vatStatus)}</span></td>
       <td>
-        <button class="invoice-btn" onclick="viewTripInvoice('${trip['Trip ID']}')" title="Invoice">Invoice</button>
-        <button class="invoice-btn" style="background:#4caf50" onclick="editTrip('${trip['Trip ID']}')" title="Edit">Edit</button>
-        ${(window.__USER__ && window.__USER__.role === 'admin') ? `<button class="invoice-btn" style="background:#f44336" onclick="deleteTrip('${trip['Trip ID']}')" title="Delete">Delete</button>` : ''}
+        <button class="invoice-btn" data-action="invoice" data-trip-id="${escapeHtml(trip['Trip ID'])}" title="Invoice">Invoice</button>
+        <button class="invoice-btn" style="background:#4caf50" data-action="edit" data-trip-id="${escapeHtml(trip['Trip ID'])}" title="Edit">Edit</button>
+        ${(window.__USER__ && window.__USER__.role === 'admin') ? `<button class="invoice-btn" style="background:#f44336" data-action="delete" data-trip-id="${escapeHtml(trip['Trip ID'])}" title="Delete">Delete</button>` : ''}
       </td>
     </tr>`;
   });
@@ -1830,6 +2134,9 @@ function createTripsTableWithInvoice(containerId, trips) {
   container.onclick = function(event) {
     const button = event.target.closest('button[data-action]');
     if (!button) return;
+    if (button.dataset.action === 'invoice') viewTripInvoice(button.dataset.tripId);
+    if (button.dataset.action === 'edit') editTrip(button.dataset.tripId);
+    if (button.dataset.action === 'delete') deleteTrip(button.dataset.tripId);
     if (button.dataset.action === 'history') viewTripStatusHistory(button.dataset.tripId);
     if (button.dataset.action === 'proof') viewDriverTripProof(button.dataset.tripId);
   };
@@ -1858,7 +2165,7 @@ function displayTripInvoice(data) {
   const trip = data.trip;
   const customer = data.customer || {};
   const settings = data.settings;
-  const companyName = settings['Company Name'] || 'Reyna Trucking Business';
+  const companyName = settings['Company Name'] || 'Limars Trucking Business';
   const companyAddress = settings['Company Address'] || '';
   const companyTIN = settings['Company TIN'] || '';
   
@@ -1916,7 +2223,7 @@ function displayTripInvoice(data) {
     if (trip['Helpers Data'] && trip['Helpers Data'].length > 2) { 
       const parsedHelpers = JSON.parse(trip['Helpers Data']);
       if (parsedHelpers.length > 0) {
-        helpersDisplay = '<br>Helpers: ' + parsedHelpers.map(h => h.name).join(', ');
+        helpersDisplay = '<br>Helpers: ' + parsedHelpers.map(h => escapeHtml(h.name)).join(', ');
       }
     }
   } catch(e) { console.warn("Helper parse error"); }
@@ -1928,10 +2235,10 @@ function displayTripInvoice(data) {
     </div>
     <div class="invoice-container" id="tripInvoiceContent">
       <div class="invoice-header">
-        <div class="invoice-company-name">${companyName}</div>
+        <div class="invoice-company-name">${escapeHtml(companyName)}</div>
         <div style="color: #666; font-size: 14px; line-height: 1.6;">
-          <div>${companyAddress}</div>
-          <div>TIN: ${companyTIN} ${vatStatus === 'VAT' ? '(VAT Registered)' : '(Non-VAT)'}</div>
+          <div>${escapeHtml(companyAddress)}</div>
+          <div>TIN: ${escapeHtml(companyTIN)} ${vatStatus === 'VAT' ? '(VAT Registered)' : '(Non-VAT)'}</div>
         </div>
         <div class="invoice-title">BILLING INVOICE / STATEMENT OF ACCOUNT</div>
       </div>
@@ -1939,15 +2246,15 @@ function displayTripInvoice(data) {
       <div class="invoice-info">
         <div class="invoice-section">
           <h3 style="color: #1565c0; margin-bottom: 10px; font-size: 16px;">BILL TO</h3>
-          <div><strong>${customer['Company Name'] || trip['Customer Name']}</strong></div>
-          <div style="font-size: 13px; color: #555;">${customer['Address'] || '-'}</div>
-          <div style="font-size: 13px; color: #555;">Contact: ${customer['Contact Number'] || '-'}</div>
+          <div><strong>${escapeHtml(customer['Company Name'] || trip['Customer Name'])}</strong></div>
+          <div style="font-size: 13px; color: #555;">${escapeHtml(customer['Address'] || '-')}</div>
+          <div style="font-size: 13px; color: #555;">Contact: ${escapeHtml(customer['Contact Number'] || '-')}</div>
         </div>
         <div class="invoice-section">
           <h3 style="color: #1565c0; margin-bottom: 10px; font-size: 16px;">INVOICE DETAILS</h3>
-          <div class="invoice-row"><strong>Invoice #:</strong><span>${trip['Trip ID']}</span></div>
-          <div class="invoice-row"><strong>Date:</strong><span>${invoiceDate}</span></div>
-          <div class="invoice-row"><strong>Terms:</strong><span>${customer['Payment Terms'] || 'COD'}</span></div>
+          <div class="invoice-row"><strong>Invoice #:</strong><span>${escapeHtml(trip['Trip ID'])}</span></div>
+          <div class="invoice-row"><strong>Date:</strong><span>${escapeHtml(invoiceDate)}</span></div>
+          <div class="invoice-row"><strong>Terms:</strong><span>${escapeHtml(customer['Payment Terms'] || 'COD')}</span></div>
         </div>
       </div>
 
@@ -1959,10 +2266,10 @@ function displayTripInvoice(data) {
               <td>
                 <div style="font-weight: bold; margin-bottom: 5px;">Freight / Hauling Service</div>
                 <div style="color: #666; font-size: 12px; line-height: 1.4;">
-                  Route: ${trip['Origin']} → ${trip['Destination']}<br>
-                  Cargo: ${trip['Cargo Type']} (${trip['Weight']} kg)<br>
-                  Lead Driver: ${trip['Driver Name']}${helpersDisplay}<br>
-                  Trucks: ${trip['Trucks Data'] || '-'}
+                  Route: ${escapeHtml(trip['Origin'])} → ${escapeHtml(trip['Destination'])}<br>
+                  Cargo: ${escapeHtml(trip['Cargo Type'])} (${escapeHtml(trip['Weight'])} kg)<br>
+                  Lead Driver: ${escapeHtml(trip['Driver Name'])}${helpersDisplay}<br>
+                  Trucks: ${escapeHtml(trip['Trucks Data'] || '-')}
                 </div>
               </td>
               <td style="text-align: right; vertical-align: top; font-weight: bold;">₱${freightService.toLocaleString('en-PH', {minimumFractionDigits: 2})}</td>
@@ -2037,16 +2344,20 @@ function createReceivablesTable(receivables) {
   html += '</tr></thead><tbody>';
   receivables.forEach(ar => {
     html += '<tr>';
-    html += `<td>${ar.customerName}</td>`;
+    html += `<td>${escapeHtml(ar.customerName)}</td>`;
     html += `<td>₱${parseFloat(ar.totalBilled).toLocaleString('en-PH',{minimumFractionDigits:2})}</td>`;
     html += `<td>₱${parseFloat(ar.totalPaid).toLocaleString('en-PH',{minimumFractionDigits:2})}</td>`;
     html += `<td style="color: ${ar.balance>0?'var(--warning)':'var(--success)'}; font-weight: bold;">₱${parseFloat(ar.balance).toLocaleString('en-PH',{minimumFractionDigits:2})}</td>`;
-    html += `<td>${ar.paymentTerms}</td>`;
-    html += `<td><button class="btn btn-secondary" style="padding: 8px 16px; font-size: 12px;" onclick="viewStatement('${ar.customerId}')">View Statement</button></td>`;
+    html += `<td>${escapeHtml(ar.paymentTerms)}</td>`;
+    html += `<td><button class="btn btn-secondary" style="padding: 8px 16px; font-size: 12px;" data-action="statement" data-customer-id="${escapeHtml(ar.customerId)}">View Statement</button></td>`;
     html += '</tr>';
   });
   html += '</tbody></table>';
   container.innerHTML = html;
+  container.onclick = function(event) {
+    const button = event.target.closest('button[data-action="statement"]');
+    if (button) viewStatement(button.dataset.customerId);
+  };
 }
 
 function createTable(containerId, data, columns, clickable=false, clickColumn=null) {
@@ -2056,11 +2367,11 @@ function createTable(containerId, data, columns, clickable=false, clickColumn=nu
     return;
   }
   let html = '<table class="data-table"><thead><tr>';
-  columns.forEach(col => { html += `<th>${col}</th>`; });
+  columns.forEach(col => { html += `<th>${escapeHtml(col)}</th>`; });
   html += '</tr></thead><tbody>';
   data.forEach(row => {
     const rowClass = clickable ? 'clickable-row' : '';
-    const rowClick = clickable && clickColumn ? `onclick="viewStatement('${row[clickColumn]}')"` : ' ';
+    const rowClick = clickable && clickColumn ? `data-customer-id="${escapeHtml(row[clickColumn])}"` : '';
     html += `<tr class="${rowClass}" ${rowClick}>`;
     columns.forEach(col => {
       let value = row[col];
@@ -2070,12 +2381,18 @@ function createTable(containerId, data, columns, clickable=false, clickColumn=nu
       if(col.includes('Amount') || col.includes('Income') || col.includes('Profit') || col.includes('Balance') || col.includes('Limit') || col.includes('Rate')) {
         value = '₱' + parseFloat(value||0).toLocaleString('en-PH', {minimumFractionDigits: 2});
       }
-      html += `<td>${value || '-'}</td>`;
+      html += `<td>${escapeHtml(value || '-')}</td>`;
     });
     html += '</tr>';
   });
   html += '</tbody></table>';
   container.innerHTML = html;
+  if (clickable && clickColumn) {
+    container.onclick = function(event) {
+      const row = event.target.closest('tr[data-customer-id]');
+      if (row) viewStatement(row.dataset.customerId);
+    };
+  }
 }
 
 function searchDrivers() {
@@ -2137,9 +2454,9 @@ function displayStatement(data) {
   
   let html = `
     <div style="margin-bottom: 20px;">
-      <h3>${customer['Customer Name']}</h3>
-      <p style="color: var(--text-gray);">${customer['Company Name'] || ''}</p>
-      <p style="color: var(--text-gray);">Contact: ${customer['Contact Number']}</p>
+      <h3>${escapeHtml(customer['Customer Name'])}</h3>
+      <p style="color: var(--text-gray);">${escapeHtml(customer['Company Name'] || '')}</p>
+      <p style="color: var(--text-gray);">Contact: ${escapeHtml(customer['Contact Number'])}</p>
       <p style="margin-top: 10px;"><strong>Current Balance: <span style="color: ${currentBalance>0?'var(--warning)':'var(--success)'}; font-size: 20px;">₱${parseFloat(currentBalance).toLocaleString('en-PH',{minimumFractionDigits:2})}</span></strong></p>
     </div>
     <table class="data-table">
@@ -2149,9 +2466,9 @@ function displayStatement(data) {
   transactions.forEach(trans => {
     html += `<tr>
       <td>${new Date(trans.date).toLocaleDateString('en-PH')}</td>
-      <td>${trans.type}</td>
-      <td>${trans.reference}</td>
-      <td>${trans.description}</td>
+      <td>${escapeHtml(trans.type)}</td>
+      <td>${escapeHtml(trans.reference)}</td>
+      <td>${escapeHtml(trans.description)}</td>
       <td style="color: var(--warning);">${trans.debit>0 ? '₱'+trans.debit.toLocaleString('en-PH',{minimumFractionDigits:2}) : '-'}</td>
       <td style="color: var(--success);">${trans.credit>0 ? '₱'+trans.credit.toLocaleString('en-PH',{minimumFractionDigits:2}) : '-'}</td>
       <td style="font-weight: bold;">₱${trans.balance.toLocaleString('en-PH',{minimumFractionDigits:2})}</td>
@@ -2176,9 +2493,19 @@ function addPayment() {
     referenceNumber: document.getElementById('paymentReference').value,
     notes: document.getElementById('paymentNotes').value
   };
+  paymentData.allocations = Array.prototype.map.call(
+    document.querySelectorAll('.payment-allocation-amount'),
+    function (input) {
+      return { tripId: input.dataset.tripId, amount: parseFloat(input.value) || 0 };
+    }
+  ).filter(function (allocation) { return allocation.amount > 0; });
+  const allocatedTotal = paymentData.allocations.reduce(function (sum, allocation) { return sum + allocation.amount; }, 0);
   
-  if(!paymentData.customerId || !paymentData.amount) {
-    showAlert('Please fill in all required fields', 'error'); return;
+  if(!paymentData.customerId || !Number.isFinite(paymentData.amount) || paymentData.amount <= 0) {
+    showAlert('Select a customer and enter a payment amount greater than zero.', 'error'); return;
+  }
+  if (allocatedTotal - paymentData.amount > 0.005) {
+    showAlert('Applied invoice amounts cannot exceed the payment amount.', 'error'); return;
   }
   
   showLoading(true);
@@ -2280,6 +2607,7 @@ function addTrip() {
     date: document.getElementById('tripDate').value,
     driverId: driverSelect.value,
     driverName: driverSelect.options[driverSelect.selectedIndex].dataset.name || driverSelect.options[driverSelect.selectedIndex].textContent,
+    customerId: customerSelect.value,
     customerName: customerSelect.options[customerSelect.selectedIndex].textContent,
     origin: document.getElementById('tripOrigin').value,
     destination: document.getElementById('tripDestination').value,
@@ -2356,20 +2684,27 @@ function createTripsTableWithInvoice(containerId, trips) {
     const income = '₱' + parseFloat(trip['Gross Income'] || 0).toLocaleString('en-PH', {minimumFractionDigits:2});
     
     html += `<tr>
-      <td>${tripDate}</td>
-      <td>${trip['Customer Name']}</td>
-      <td>${trip['Origin']} to ${trip['Destination']}</td>
+      <td>${escapeHtml(tripDate)}</td>
+      <td>${escapeHtml(trip['Customer Name'])}</td>
+      <td>${escapeHtml(trip['Origin'])} to ${escapeHtml(trip['Destination'])}</td>
       <td>${escapeHtml(trip['Trip Status'] || 'Scheduled')}</td>
       <td style="font-weight:bold">${income}</td>
       <td>
-        <button class="invoice-btn" onclick="viewTripInvoice('${trip['Trip ID']}')">Invoice</button>
-        <button class="btn-success" style="padding:5px 10px; border-radius:4px; border:none; cursor:pointer;" onclick="editTrip('${trip['Trip ID']}')">Edit</button>
-        ${(window.__USER__ && window.__USER__.role === 'admin') ? `<button class="btn-danger" style="padding:5px 10px; border-radius:4px; border:none; cursor:pointer;" onclick="deleteTrip('${trip['Trip ID']}')">Delete</button>` : ''}
+        <button class="invoice-btn" data-action="invoice" data-trip-id="${escapeHtml(trip['Trip ID'])}">Invoice</button>
+        <button class="btn-success" style="padding:5px 10px; border-radius:4px; border:none; cursor:pointer;" data-action="edit" data-trip-id="${escapeHtml(trip['Trip ID'])}">Edit</button>
+        ${(window.__USER__ && window.__USER__.role === 'admin') ? `<button class="btn-danger" style="padding:5px 10px; border-radius:4px; border:none; cursor:pointer;" data-action="delete" data-trip-id="${escapeHtml(trip['Trip ID'])}">Delete</button>` : ''}
       </td>
     </tr>`;
   });
   html += '</tbody></table>';
   container.innerHTML = html;
+  container.onclick = function(event) {
+    const button = event.target.closest('button[data-action]');
+    if (!button) return;
+    if (button.dataset.action === 'invoice') viewTripInvoice(button.dataset.tripId);
+    if (button.dataset.action === 'edit') editTrip(button.dataset.tripId);
+    if (button.dataset.action === 'delete') deleteTrip(button.dataset.tripId);
+  };
 }
 
 function escapeHtml(value) {
@@ -2542,8 +2877,8 @@ function renderDriverDashboard(data) {
   document.getElementById('driverActiveCount').textContent = active.length;
   document.getElementById('driverCompletedCount').textContent = completed.length;
   document.getElementById('driverIncidentCount').textContent = incidents.length;
-  renderDriverTrips(active.slice(0, 3), 'driverOverviewTrips', false);
-  renderDriverIncidents(incidents.slice(0, 3), 'driverOverviewIncidents');
+  renderDriverTrips(active.slice(0, 10), 'driverOverviewTrips', false);
+  renderDriverIncidents(incidents.slice(0, 10), 'driverOverviewIncidents');
   renderDriverTrips(active, 'driverCurrentTrips', false);
   renderDriverTrips(completed, 'driverCompletedTrips', true);
   renderDriverIncidents(incidents, 'driverIncidentList');
@@ -2588,6 +2923,7 @@ function populateIncidentTripSelect(trips) {
 function renderDriverIncidents(incidents, containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
+  container.classList.toggle('is-scrollable', incidents.length >= 5);
   if (!incidents.length) {
     container.innerHTML = '<p class="usr-note">You have not reported any trip problems.</p>';
     return;
@@ -2761,6 +3097,7 @@ window.addEventListener('pagehide', function() {
 
 function renderDriverTrips(trips, containerId, completed) {
   const container = document.getElementById(containerId);
+  container.classList.toggle('is-scrollable', trips.length >= 5);
   if (!trips.length) {
     container.innerHTML = '<p class="usr-note">' + (completed ? 'No completed deliveries yet.' : 'You have no active trips assigned right now.') + '</p>';
     return;
@@ -2978,8 +3315,13 @@ function editTrip(tripId) {
   document.getElementById('tripDate').value = String(trip['Date'] || '').slice(0, 10);
   document.getElementById('tripDriver').value = trip['Driver ID'] || '';
   const customerSelect = document.getElementById('tripCustomer');
-  customerSelect.value = '';
-  Array.prototype.forEach.call(customerSelect.options, function(o) { if (o.textContent === trip['Customer Name']) customerSelect.value = o.value; });
+  customerSelect.value = trip['Customer ID'] || '';
+  if (!customerSelect.value) {
+    const matchingCustomers = Array.prototype.filter.call(customerSelect.options, function(option) {
+      return option.textContent === trip['Customer Name'] && option.value;
+    });
+    if (matchingCustomers.length === 1) customerSelect.value = matchingCustomers[0].value;
+  }
   const fields = { tripRate: 'Trip Rate', tripSubsidy: 'Customer Subsidy', tripOrigin: 'Origin', tripDestination: 'Destination', tripDistance: 'Distance',
     tripCargo: 'Cargo Type', tripWeight: 'Weight', tripFuel: 'Fuel Cost', tripToll: 'Toll Fee', tripMeal: 'Meal Allowance', tripOther: 'Other Expenses',
     tripDriverPay: 'Driver Pay', tripNotes: 'Notes' };
@@ -3218,44 +3560,44 @@ function displayAllReports() {
 }
 
 function formatCurrency(amount) { return '₱' + parseFloat(amount||0).toLocaleString('en-PH', {minimumFractionDigits: 2}); }
-function formatDate(dateValue) { if (!dateValue) return '-'; try { const date = new Date(dateValue); return date.toLocaleDateString('en-PH'); } catch(e) { return dateValue; } }
+function formatDate(dateValue) { if (!dateValue) return '-'; try { const date = new Date(dateValue); return isNaN(date.getTime()) ? '-' : date.toLocaleDateString('en-PH'); } catch(e) { return '-'; } }
 
 function displayProfitAndLoss(report) {
-  let html = `<div class="pl-report-container"><div class="pl-header"><h2 style="font-size: 28px; color: #1565c0; margin-bottom: 10px;">${report.companyName}</h2><h3 style="font-size: 22px; color: #1565c0; font-weight: bold;">${report.reportTitle}</h3><p style="color: #666; margin-top: 10px;">For the Period ${report.periodStart} to ${report.periodEnd}</p></div>`;
+  let html = `<div class="pl-report-container"><div class="pl-header"><h2 style="font-size: 28px; color: #1565c0; margin-bottom: 10px;">${escapeHtml(report.companyName)}</h2><h3 style="font-size: 22px; color: #1565c0; font-weight: bold;">${escapeHtml(report.reportTitle)}</h3><p style="color: #666; margin-top: 10px;">For the Period ${escapeHtml(report.periodStart)} to ${escapeHtml(report.periodEnd)}</p></div>`;
   report.sections.forEach(section => {
-    html += `<div class="pl-section"><div class="pl-section-title">${section.title}</div>`;
+    html += `<div class="pl-section"><div class="pl-section-title">${escapeHtml(section.title)}</div>`;
     section.items.forEach(item => {
-      if (item.isNote) { html += `<div class="pl-item" style="font-style: italic; color: #666; padding-left: 20px;">${item.label}</div>`;
+      if (item.isNote) { html += `<div class="pl-item" style="font-style: italic; color: #666; padding-left: 20px;">${escapeHtml(item.label)}</div>`;
       } else if (item.amount !== null && item.amount !== undefined) {
         const isNegative = item.isNegative ? '-' : '';
-        html += `<div class="pl-item"><span>${item.label}</span><span style="font-weight: 600;">${isNegative}${formatCurrency(item.amount)}</span></div>`;
+        html += `<div class="pl-item"><span>${escapeHtml(item.label)}</span><span style="font-weight: 600;">${isNegative}${formatCurrency(item.amount)}</span></div>`;
       }
     });
     if (section.total) {
       const totalClass = section.total.isGrandTotal ? 'pl-grand-total' : section.total.isBold ? 'pl-total' : '';
-      html += `<div class="pl-item ${totalClass}"><span>${section.total.label}</span><span>${formatCurrency(section.total.amount)}</span></div>`;
-      if (section.total.percentage) html += `<div class="pl-item" style="font-style: italic; color: #666; justify-content: flex-end;"><span>${section.total.percentage}</span></div>`;
+      html += `<div class="pl-item ${totalClass}"><span>${escapeHtml(section.total.label)}</span><span>${formatCurrency(section.total.amount)}</span></div>`;
+      if (section.total.percentage) html += `<div class="pl-item" style="font-style: italic; color: #666; justify-content: flex-end;"><span>${escapeHtml(section.total.percentage)}</span></div>`;
     }
     html += `</div>`;
   });
   if (report.summary) {
     html += `<div class="pl-section" style="margin-top: 40px; background: #e3f2fd; padding: 20px; border-radius: 8px;"><div class="pl-section-title" style="color: #0d47a1;">KEY FINANCIAL METRICS</div><div class="pl-item"><span>Gross Profit Margin:</span><span style="font-weight: 600;">${report.summary.grossProfitMargin}%</span></div><div class="pl-item"><span>Net Profit Margin:</span><span style="font-weight: 600;">${report.summary.netProfitMargin}%</span></div></div>`;
   }
-  html += `<div style="margin-top: 50px; text-align: center; font-size: 12px; color: #666; padding-top: 20px; border-top: 1px solid #e0e0e0;"><p><strong>This is an accounting standard financial statement.</strong></p><p style="margin-top: 10px; font-style: italic;">Generated on ${new Date().toLocaleString('en-PH')}</p></div></div>`;
+  html += `<div style="margin-top: 50px; text-align: center; font-size: 12px; color: #666; padding-top: 20px; border-top: 1px solid #e0e0e0;"><p><strong>Management report based on delivered trips and recorded expenses; not a ledger-derived financial statement.</strong></p><p style="margin-top: 10px; font-style: italic;">Generated on ${escapeHtml(new Date().toLocaleString('en-PH'))}</p></div></div>`;
   document.getElementById('reportProfitLoss').innerHTML = html;
 }
 
 function displayIncomeStatement(report) {
-  let html = `<div style="background: white; color: #1565c0; padding: 40px; border-radius: 10px;"><div style="text-align: center; border-bottom: 3px solid #1565c0; padding-bottom: 20px; margin-bottom: 30px;"><h2 style="font-size: 28px; color: #1565c0; margin-bottom: 10px;">${report.companyName}</h2><h3 style="font-size: 22px; color: #1565c0; font-weight: bold;">${report.reportTitle}</h3><p style="color: #1565c0; margin-top: 10px;">Period: ${currentReports.dateRange?formatDate(currentReports.dateRange.startDate)+' - '+formatDate(currentReports.dateRange.endDate):''}</p></div>`;
+  let html = `<div style="background: white; color: #1565c0; padding: 40px; border-radius: 10px;"><div style="text-align: center; border-bottom: 3px solid #1565c0; padding-bottom: 20px; margin-bottom: 30px;"><h2 style="font-size: 28px; color: #1565c0; margin-bottom: 10px;">${escapeHtml(report.companyName)}</h2><h3 style="font-size: 22px; color: #1565c0; font-weight: bold;">${escapeHtml(report.reportTitle)}</h3><p style="color: #1565c0; margin-top: 10px;">Period: ${currentReports.dateRange?escapeHtml(formatDate(currentReports.dateRange.startDate)+' - '+formatDate(currentReports.dateRange.endDate)):''}</p></div>`;
   report.sections.forEach(section => {
-    html += `<div style="margin: 30px 0;"><h4 style="color: #0d47a1; font-size: 18px; font-weight: bold; margin-bottom: 15px; border-bottom: 2px solid #1565c0; padding-bottom: 8px;">${section.title}</h4>`;
+    html += `<div style="margin: 30px 0;"><h4 style="color: #0d47a1; font-size: 18px; font-weight: bold; margin-bottom: 15px; border-bottom: 2px solid #1565c0; padding-bottom: 8px;">${escapeHtml(section.title)}</h4>`;
     section.items.forEach(item => {
       const indent = item.isSubItem ? 'margin-left: 30px;' : '';
-      html += `<div style="display: flex; justify-content: space-between; padding: 8px 0; color: #1565c0; ${indent}"><span>${item.label}</span><span style="font-weight: 600;">${formatCurrency(item.amount||item.value)}</span></div>`;
+      html += `<div style="display: flex; justify-content: space-between; padding: 8px 0; color: #1565c0; ${indent}"><span>${escapeHtml(item.label)}</span><span style="font-weight: 600;">${formatCurrency(item.amount||item.value)}</span></div>`;
     });
     if (section.total) {
       const totalStyle = section.total.isGrandTotal ? 'font-size: 20px; font-weight: bold; border-top: 3px double #1565c0; margin-top: 15px; padding-top: 15px;' : 'font-weight: bold; border-top: 2px solid #1565c0; margin-top: 10px; padding-top: 10px;';
-      html += `<div style="display: flex; justify-content: space-between; padding: 8px 0; color: #0d47a1; ${totalStyle}"><span>${section.total.label}</span><span>${formatCurrency(section.total.amount)}</span></div>`;
+      html += `<div style="display: flex; justify-content: space-between; padding: 8px 0; color: #0d47a1; ${totalStyle}"><span>${escapeHtml(section.total.label)}</span><span>${formatCurrency(section.total.amount)}</span></div>`;
     }
     html += '</div>';
   });
@@ -3264,12 +3606,18 @@ function displayIncomeStatement(report) {
 }
 
 function displayTrialBalance(report) {
-  let html = `<div style="background: white; color: #1565c0; padding: 40px; border-radius: 10px;"><div style="text-align: center; border-bottom: 3px solid #1565c0; padding-bottom: 20px; margin-bottom: 30px;"><h2 style="font-size: 28px; color: #1565c0; margin-bottom: 10px;">${report.companyName}</h2><h3 style="font-size: 22px; color: #1565c0; font-weight: bold;">${report.reportTitle}</h3><p style="color: #1565c0; margin-top: 10px;">As of ${new Date().toLocaleDateString('en-PH')}</p></div><table style="width: 100%; border-collapse: collapse; color: #1565c0;"><thead><tr style="background: #1565c0; color: white;"><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Account</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Debit</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Credit</th></tr></thead><tbody>`;
+  if (!report.available) {
+    document.getElementById('reportTrial').innerHTML =
+      '<div class="chart-container"><h3>' + escapeHtml(report.reportTitle) + '</h3><p>' +
+      escapeHtml(report.message) + '</p></div>';
+    return;
+  }
+  let html = `<div style="background: white; color: #1565c0; padding: 40px; border-radius: 10px;"><div style="text-align: center; border-bottom: 3px solid #1565c0; padding-bottom: 20px; margin-bottom: 30px;"><h2 style="font-size: 28px; color: #1565c0; margin-bottom: 10px;">${escapeHtml(report.companyName)}</h2><h3 style="font-size: 22px; color: #1565c0; font-weight: bold;">${escapeHtml(report.reportTitle)}</h3><p style="color: #1565c0; margin-top: 10px;">As of ${escapeHtml(new Date().toLocaleDateString('en-PH'))}</p></div><table style="width: 100%; border-collapse: collapse; color: #1565c0;"><thead><tr style="background: #1565c0; color: white;"><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Account</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Debit</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Credit</th></tr></thead><tbody>`;
   report.accounts.forEach(account => {
     if (account.isHeader) {
-      html += `<tr style="background: #e3f2fd;"><td colspan="3" style="padding: 10px; font-weight: bold; border: 1px solid #1565c0;">${account.account}</td></tr>`;
+      html += `<tr style="background: #e3f2fd;"><td colspan="3" style="padding: 10px; font-weight: bold; border: 1px solid #1565c0;">${escapeHtml(account.account)}</td></tr>`;
     } else {
-      html += `<tr><td style="padding: 8px 12px; padding-left: 30px; border: 1px solid #e0e0e0;">${account.account}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0;">${account.debit>0?formatCurrency(account.debit):'-'}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0;">${account.credit>0?formatCurrency(account.credit):'-'}</td></tr>`;
+      html += `<tr><td style="padding: 8px 12px; padding-left: 30px; border: 1px solid #e0e0e0;">${escapeHtml(account.account)}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0;">${account.debit>0?formatCurrency(account.debit):'-'}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0;">${account.credit>0?formatCurrency(account.credit):'-'}</td></tr>`;
     }
   });
   html += `<tr style="background: #e3f2fd; font-weight: bold; border-top: 3px solid #1565c0;"><td style="padding: 12px; border: 1px solid #1565c0;">TOTAL</td><td style="padding: 12px; text-align: right; border: 1px solid #1565c0;">${formatCurrency(report.totalDebit)}</td><td style="padding: 12px; text-align: right; border: 1px solid #1565c0;">${formatCurrency(report.totalCredit)}</td></tr></tbody></table></div>`;
@@ -3277,54 +3625,54 @@ function displayTrialBalance(report) {
 }
 
 function displayExpensesReport(report) {
-  let html = `<div style="background: white; color: #1565c0; padding: 40px; border-radius: 10px;"><div style="text-align: center; border-bottom: 3px solid #1565c0; padding-bottom: 20px; margin-bottom: 30px;"><h2 style="font-size: 28px; color: #1565c0; margin-bottom: 10px;">${report.companyName}</h2><h3 style="font-size: 22px; color: #1565c0; font-weight: bold;">${report.reportTitle}</h3><p style="color: #1565c0; margin-top: 10px;">Period: ${currentReports.dateRange?formatDate(currentReports.dateRange.startDate)+' - '+formatDate(currentReports.dateRange.endDate):''}</p></div><table style="width: 100%; border-collapse: collapse; color: #1565c0; margin-bottom: 30px;"><thead><tr style="background: #1565c0; color: white;"><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Date</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Expense ID</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Category</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Description</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Amount</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Paid By</th></tr></thead><tbody>`;
+  let html = `<div style="background: white; color: #1565c0; padding: 40px; border-radius: 10px;"><div style="text-align: center; border-bottom: 3px solid #1565c0; padding-bottom: 20px; margin-bottom: 30px;"><h2 style="font-size: 28px; color: #1565c0; margin-bottom: 10px;">${escapeHtml(report.companyName)}</h2><h3 style="font-size: 22px; color: #1565c0; font-weight: bold;">${escapeHtml(report.reportTitle)}</h3><p style="color: #1565c0; margin-top: 10px;">Period: ${currentReports.dateRange?escapeHtml(formatDate(currentReports.dateRange.startDate)+' - '+formatDate(currentReports.dateRange.endDate)):''}</p></div><table style="width: 100%; border-collapse: collapse; color: #1565c0; margin-bottom: 30px;"><thead><tr style="background: #1565c0; color: white;"><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Date</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Expense ID</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Category</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Description</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Amount</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Paid By</th></tr></thead><tbody>`;
   report.expenses.forEach(exp => {
-    html += `<tr><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${formatDate(exp.date)}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${exp.expenseId}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${exp.category}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${exp.description}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0; font-weight: 600;">${formatCurrency(exp.amount)}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${exp.paidBy}</td></tr>`;
+    html += `<tr><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${escapeHtml(formatDate(exp.date))}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${escapeHtml(exp.expenseId)}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${escapeHtml(exp.category)}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${escapeHtml(exp.description)}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0; font-weight: 600;">${formatCurrency(exp.amount)}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${escapeHtml(exp.paidBy)}</td></tr>`;
   });
   html += `</tbody></table><div style="margin-top: 30px;"><h4 style="color: #0d47a1; font-size: 18px; font-weight: bold; margin-bottom: 15px;">Summary by Category</h4>`;
   Object.entries(report.summary).forEach(([category,amount]) => {
-    html += `<div style="display: flex; justify-content: space-between; padding: 8px 0; color: #1565c0;"><span>${category}</span><span style="font-weight: 600;">${formatCurrency(amount)}</span></div>`;
+    html += `<div style="display: flex; justify-content: space-between; padding: 8px 0; color: #1565c0;"><span>${escapeHtml(category)}</span><span style="font-weight: 600;">${formatCurrency(amount)}</span></div>`;
   });
   html += `<div style="display: flex; justify-content: space-between; padding: 12px 0; color: #0d47a1; font-size: 20px; font-weight: bold; border-top: 3px double #1565c0; margin-top: 15px;"><span>TOTAL EXPENSES</span><span>${formatCurrency(report.totalExpenses)}</span></div></div></div>`;
   document.getElementById('reportExpenses').innerHTML = html;
 }
 
 function displayCustomerReport(report) {
-  let html = `<div style="background: white; color: #1565c0; padding: 40px; border-radius: 10px;"><div style="text-align: center; border-bottom: 3px solid #1565c0; padding-bottom: 20px; margin-bottom: 30px;"><h2 style="font-size: 28px; color: #1565c0; margin-bottom: 10px;">${report.companyName}</h2><h3 style="font-size: 22px; color: #1565c0; font-weight: bold;">${report.reportTitle}</h3><p style="color: #1565c0; margin-top: 10px;">Total Customers: ${report.totalCustomers} | Active: ${report.activeCustomers}</p></div><table style="width: 100%; border-collapse: collapse; color: #1565c0;"><thead><tr style="background: #1565c0; color: white;"><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Customer</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Company</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Trips</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Total Billed</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Total Paid</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Balance</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Status</th></tr></thead><tbody>`;
+  let html = `<div style="background: white; color: #1565c0; padding: 40px; border-radius: 10px;"><div style="text-align: center; border-bottom: 3px solid #1565c0; padding-bottom: 20px; margin-bottom: 30px;"><h2 style="font-size: 28px; color: #1565c0; margin-bottom: 10px;">${escapeHtml(report.companyName)}</h2><h3 style="font-size: 22px; color: #1565c0; font-weight: bold;">${escapeHtml(report.reportTitle)}</h3><p style="color: #1565c0; margin-top: 10px;">Total Customers: ${report.totalCustomers} | Active: ${report.activeCustomers}</p><p>${report.unlinkedDeliveredTrips ? 'Warning: ' + report.unlinkedDeliveredTrips + ' delivered trip(s) are not linked to a customer and are excluded from customer balances.' : ''}</p></div><table style="width: 100%; border-collapse: collapse; color: #1565c0;"><thead><tr style="background: #1565c0; color: white;"><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Customer</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Company</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Trips</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Total Billed</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Total Paid</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Balance</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Status</th></tr></thead><tbody>`;
   report.customers.forEach(customer => {
-    html += `<tr><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${customer.customerName}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${customer.companyName||'-'}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0;">${customer.totalTrips}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0; font-weight: 600;">${formatCurrency(customer.totalBilled)}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0;">${formatCurrency(customer.totalPaid)}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0; font-weight: bold; color: ${customer.balance>0?'#ff9800':'#4caf50'};">${formatCurrency(customer.balance)}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${customer.status}</td></tr>`;
+    html += `<tr><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${escapeHtml(customer.customerName)}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${escapeHtml(customer.companyName||'-')}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0;">${customer.totalTrips}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0; font-weight: 600;">${formatCurrency(customer.totalBilled)}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0;">${formatCurrency(customer.totalPaid)}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0; font-weight: bold; color: ${customer.balance>0?'#ff9800':'#4caf50'};">${formatCurrency(customer.balance)}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${escapeHtml(customer.status)}</td></tr>`;
   });
   html += `</tbody></table></div>`;
   document.getElementById('reportCustomer').innerHTML = html;
 }
 
 function displayDriversReport(report) {
-  let html = `<div style="background: white; color: #1565c0; padding: 40px; border-radius: 10px;"><div style="text-align: center; border-bottom: 3px solid #1565c0; padding-bottom: 20px; margin-bottom: 30px;"><h2 style="font-size: 28px; color: #1565c0; margin-bottom: 10px;">${report.companyName}</h2><h3 style="font-size: 22px; color: #1565c0; font-weight: bold;">${report.reportTitle}</h3><p style="color: #1565c0; margin-top: 10px;">Total Drivers: ${report.totalDrivers} | Active: ${report.activeDrivers}</p><p style="color: #1565c0;">Period: ${currentReports.dateRange?formatDate(currentReports.dateRange.startDate)+' - '+formatDate(currentReports.dateRange.endDate):''}</p></div><table style="width: 100%; border-collapse: collapse; color: #1565c0;"><thead><tr style="background: #1565c0; color: white;"><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Driver</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Trips</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Revenue</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Profit</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Est. Pay</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Status</th></tr></thead><tbody>`;
+  let html = `<div style="background: white; color: #1565c0; padding: 40px; border-radius: 10px;"><div style="text-align: center; border-bottom: 3px solid #1565c0; padding-bottom: 20px; margin-bottom: 30px;"><h2 style="font-size: 28px; color: #1565c0; margin-bottom: 10px;">${escapeHtml(report.companyName)}</h2><h3 style="font-size: 22px; color: #1565c0; font-weight: bold;">${escapeHtml(report.reportTitle)}</h3><p style="color: #1565c0; margin-top: 10px;">Total Drivers: ${report.totalDrivers} | Active: ${report.activeDrivers}</p><p style="color: #1565c0;">Period: ${currentReports.dateRange?escapeHtml(formatDate(currentReports.dateRange.startDate)+' - '+formatDate(currentReports.dateRange.endDate)):''}</p></div><table style="width: 100%; border-collapse: collapse; color: #1565c0;"><thead><tr style="background: #1565c0; color: white;"><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Driver</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Trips</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Revenue</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Profit</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Est. Pay</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Status</th></tr></thead><tbody>`;
   report.drivers.forEach(driver => {
-    html += `<tr><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${driver.driverName}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0;">${driver.totalTrips}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0; font-weight: 600;">${formatCurrency(driver.totalRevenue)}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0;">${formatCurrency(driver.totalProfit)}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0; font-weight: bold;">${formatCurrency(driver.estimatedPay)}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${driver.status}</td></tr>`;
+    html += `<tr><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${escapeHtml(driver.driverName)}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0;">${driver.totalTrips}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0; font-weight: 600;">${formatCurrency(driver.totalRevenue)}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0;">${formatCurrency(driver.totalProfit)}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0; font-weight: bold;">${formatCurrency(driver.estimatedPay)}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${escapeHtml(driver.status)}</td></tr>`;
   });
   html += `</tbody></table></div>`;
   document.getElementById('reportDrivers').innerHTML = html;
 }
 
 function displayAccountsReceivableReport(report) {
-  let html = `<div style="background: white; color: #1565c0; padding: 40px; border-radius: 10px;"><div style="text-align: center; border-bottom: 3px solid #1565c0; padding-bottom: 20px; margin-bottom: 30px;"><h2 style="font-size: 28px; color: #1565c0; margin-bottom: 10px;">${report.companyName}</h2><h3 style="font-size: 22px; color: #1565c0; font-weight: bold;">${report.reportTitle}</h3><p style="color: #1565c0; margin-top: 10px;">Total Outstanding: ${formatCurrency(report.totalReceivables)}</p></div><table style="width: 100%; border-collapse: collapse; color: #1565c0;"><thead><tr style="background: #1565c0; color: white;"><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Customer</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Total Billed</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Total Paid</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Balance</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Credit Limit</th><th style="padding: 12px; text-align: center; border: 1px solid #1565c0;">Utilization %</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Terms</th></tr></thead><tbody>`;
+  let html = `<div style="background: white; color: #1565c0; padding: 40px; border-radius: 10px;"><div style="text-align: center; border-bottom: 3px solid #1565c0; padding-bottom: 20px; margin-bottom: 30px;"><h2 style="font-size: 28px; color: #1565c0; margin-bottom: 10px;">${escapeHtml(report.companyName)}</h2><h3 style="font-size: 22px; color: #1565c0; font-weight: bold;">${escapeHtml(report.reportTitle)}</h3><p style="color: #1565c0; margin-top: 10px;">Total Outstanding: ${formatCurrency(report.totalReceivables)}</p></div><table style="width: 100%; border-collapse: collapse; color: #1565c0;"><thead><tr style="background: #1565c0; color: white;"><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Customer</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Total Billed</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Total Paid</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Balance</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Credit Limit</th><th style="padding: 12px; text-align: center; border: 1px solid #1565c0;">Utilization %</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Terms</th></tr></thead><tbody>`;
   report.receivables.forEach(ar => {
     const utilizationColor = ar.utilizationPercent>90 ? '#c62828' : ar.utilizationPercent>70 ? '#ff9800' : '#4caf50';
-    html += `<tr><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${ar.customerName}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0;">${formatCurrency(ar.totalBilled)}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0;">${formatCurrency(ar.totalPaid)}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0; font-weight: bold; color: ${ar.balance>0?'#ff9800':'#4caf50'};">${formatCurrency(ar.balance)}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0;">${formatCurrency(ar.creditLimit)}</td><td style="padding: 8px 12px; text-align: center; border: 1px solid #e0e0e0; font-weight: bold; color: ${utilizationColor};">${ar.utilizationPercent}%</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${ar.paymentTerms}</td></tr>`;
+    html += `<tr><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${escapeHtml(ar.customerName)}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0;">${formatCurrency(ar.totalBilled)}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0;">${formatCurrency(ar.totalPaid)}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0; font-weight: bold; color: ${ar.balance>0?'#ff9800':'#4caf50'};">${formatCurrency(ar.balance)}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0;">${formatCurrency(ar.creditLimit)}</td><td style="padding: 8px 12px; text-align: center; border: 1px solid #e0e0e0; font-weight: bold; color: ${utilizationColor};">${escapeHtml(ar.utilizationPercent)}%</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${escapeHtml(ar.paymentTerms)}</td></tr>`;
   });
   html += `<tr style="background: #e3f2fd; font-weight: bold; border-top: 3px solid #1565c0;"><td style="padding: 12px; border: 1px solid #1565c0;">TOTAL</td><td style="padding: 12px; text-align: right; border: 1px solid #1565c0;">${formatCurrency(report.totalBilled)}</td><td style="padding: 12px; text-align: right; border: 1px solid #1565c0;">${formatCurrency(report.totalPaid)}</td><td style="padding: 12px; text-align: right; border: 1px solid #1565c0;">${formatCurrency(report.totalReceivables)}</td><td colspan="3" style="padding: 12px; border: 1px solid #1565c0;"></td></tr></tbody></table></div>`;
   document.getElementById('reportReceivables').innerHTML = html;
 }
 
 function displayPaymentsReport(report) {
-  let html = `<div style="background: white; color: #1565c0; padding: 40px; border-radius: 10px;"><div style="text-align: center; border-bottom: 3px solid #1565c0; padding-bottom: 20px; margin-bottom: 30px;"><h2 style="font-size: 28px; color: #1565c0; margin-bottom: 10px;">${report.companyName}</h2><h3 style="font-size: 22px; color: #1565c0; font-weight: bold;">${report.reportTitle}</h3><p style="color: #1565c0; margin-top: 10px;">Period: ${currentReports.dateRange?formatDate(currentReports.dateRange.startDate)+' - '+formatDate(currentReports.dateRange.endDate):''}</p><p style="color: #1565c0;">Total Collected: ${formatCurrency(report.totalPayments)} | Transactions: ${report.totalTransactions}</p></div><table style="width: 100%; border-collapse: collapse; color: #1565c0; margin-bottom: 30px;"><thead><tr style="background: #1565c0; color: white;"><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Date</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Payment ID</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Customer</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Amount</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Method</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Reference</th></tr></thead><tbody>`;
+  let html = `<div style="background: white; color: #1565c0; padding: 40px; border-radius: 10px;"><div style="text-align: center; border-bottom: 3px solid #1565c0; padding-bottom: 20px; margin-bottom: 30px;"><h2 style="font-size: 28px; color: #1565c0; margin-bottom: 10px;">${escapeHtml(report.companyName)}</h2><h3 style="font-size: 22px; color: #1565c0; font-weight: bold;">${escapeHtml(report.reportTitle)}</h3><p style="color: #1565c0; margin-top: 10px;">Period: ${currentReports.dateRange?escapeHtml(formatDate(currentReports.dateRange.startDate)+' - '+formatDate(currentReports.dateRange.endDate)):''}</p><p style="color: #1565c0;">Total Collected: ${formatCurrency(report.totalPayments)} | Transactions: ${report.totalTransactions}</p></div><table style="width: 100%; border-collapse: collapse; color: #1565c0; margin-bottom: 30px;"><thead><tr style="background: #1565c0; color: white;"><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Date</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Payment ID</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Customer</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Amount</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Applied To</th><th style="padding: 12px; text-align: right; border: 1px solid #1565c0;">Unapplied</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Method</th><th style="padding: 12px; text-align: left; border: 1px solid #1565c0;">Reference</th></tr></thead><tbody>`;
   report.payments.forEach(payment => {
-    html += `<tr><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${formatDate(payment.paymentDate)}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${payment.paymentId}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${payment.customerName}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0; font-weight: 600;">${formatCurrency(payment.amount)}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${payment.paymentMethod}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${payment.referenceNumber||'-'}</td></tr>`;
+    html += `<tr><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${escapeHtml(formatDate(payment.paymentDate))}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${escapeHtml(payment.paymentId)}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${escapeHtml(payment.customerName)}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0; font-weight: 600;">${formatCurrency(payment.amount)}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${escapeHtml(payment.appliedTrips || 'Customer credit')}</td><td style="padding: 8px 12px; text-align: right; border: 1px solid #e0e0e0;">${formatCurrency(payment.unappliedAmount)}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${escapeHtml(payment.paymentMethod)}</td><td style="padding: 8px 12px; border: 1px solid #e0e0e0;">${escapeHtml(payment.referenceNumber||'-')}</td></tr>`;
   });
   html += `</tbody></table><div style="margin-top: 30px;"><h4 style="color: #0d47a1; font-size: 18px; font-weight: bold; margin-bottom: 15px;">Summary by Payment Method</h4>`;
   Object.entries(report.paymentsByMethod).forEach(([method,amount]) => {
-    html += `<div style="display: flex; justify-content: space-between; padding: 8px 0; color: #1565c0;"><span>${method}</span><span style="font-weight: 600;">${formatCurrency(amount)}</span></div>`;
+    html += `<div style="display: flex; justify-content: space-between; padding: 8px 0; color: #1565c0;"><span>${escapeHtml(method)}</span><span style="font-weight: 600;">${formatCurrency(amount)}</span></div>`;
   });
   html += `<div style="display: flex; justify-content: space-between; padding: 12px 0; color: #0d47a1; font-size: 20px; font-weight: bold; border-top: 3px double #1565c0; margin-top: 15px;"><span>TOTAL PAYMENTS</span><span>${formatCurrency(report.totalPayments)}</span></div></div></div>`;
   document.getElementById('reportPayments').innerHTML = html;
@@ -3382,7 +3730,7 @@ function downloadReportExcel() {
   if(currentReports.paymentsReport) addReportSheet('Payments', currentReports.paymentsReport.payments, ['paymentDate','paymentId','customerName','amount','paymentMethod','referenceNumber']);
   if(currentReports.accountsReceivable) addReportSheet('Receivables', currentReports.accountsReceivable.receivables, ['customerName','totalBilled','totalPaid','balance','creditLimit','paymentTerms']);
   
-  XLSX.writeFile(wb, 'reyna-business-reports.xlsx');
+  XLSX.writeFile(wb, 'limars-business-reports.xlsx');
   showAlert('Excel file downloaded successfully!', 'success');
 }
 
@@ -3417,6 +3765,13 @@ window.onclick = function(event) {
   document.getElementById('acctHeadName').textContent = shown;
   var roleName = me.role === 'admin' ? 'Admin' : (me.role === 'driver' ? 'Driver' : 'Employee');
   document.getElementById('acctHeadSub').textContent = (me.username ? '@' + me.username + ' \u00b7 ' : '') + roleName;
+  var driverName = document.getElementById('driverAcctName');
+  if (driverName) {
+    driverName.textContent = shown;
+    document.getElementById('driverAcctAvatar').textContent = (shown.trim().charAt(0) || '?').toUpperCase();
+    document.getElementById('driverAcctHeadName').textContent = shown;
+    document.getElementById('driverAcctHeadSub').textContent = (me.username ? '@' + me.username + ' \u00b7 ' : '') + roleName;
+  }
   // Cosmetic only: the server refuses these actions for non-admins anyway.
   if (me.role !== 'admin') {
     var b = document.getElementById('usersNavBtn'); if (b) b.remove();
@@ -3425,14 +3780,17 @@ window.onclick = function(event) {
 })();
 
 /* Account dropdown (fixed-position so the scrolling nav bar cannot clip it) */
-function usrCloseMenu() {
-  var m = document.getElementById('acctMenu'), b = document.getElementById('acctBtn');
+function usrCloseMenu(prefix) {
+  prefix = prefix || 'acct';
+  var m = document.getElementById(prefix + 'Menu'), b = document.getElementById(prefix + 'Btn');
   if (m) m.classList.remove('open'); if (b) b.setAttribute('aria-expanded', 'false');
 }
-function usrToggleMenu(ev) {
+function usrToggleMenu(ev, prefix) {
+  prefix = prefix || 'acct';
   ev.stopPropagation();
-  var m = document.getElementById('acctMenu'), b = document.getElementById('acctBtn');
-  if (m.classList.contains('open')) { usrCloseMenu(); return; }
+  var m = document.getElementById(prefix + 'Menu'), b = document.getElementById(prefix + 'Btn');
+  if (m.classList.contains('open')) { usrCloseMenu(prefix); return; }
+  usrCloseMenu(prefix === 'acct' ? 'driverAcct' : 'acct');
   var r = b.getBoundingClientRect();
   m.style.top = (r.bottom + 6) + 'px'; m.style.left = 'auto'; m.style.right = Math.max(8, window.innerWidth - r.right) + 'px';
   m.classList.add('open'); b.setAttribute('aria-expanded', 'true');
@@ -3444,9 +3802,14 @@ function usrGoUsers(ev) {
   document.getElementById('acctBtn').classList.add('active');   // highlight the account button instead
   usrLoadUsers();
 }
-document.addEventListener('click', function (e) { var a = document.getElementById('acct'); if (a && !a.contains(e.target)) usrCloseMenu(); });
-document.addEventListener('keydown', function (e) { if (e.key === 'Escape') usrCloseMenu(); });
-window.addEventListener('resize', usrCloseMenu);
+document.addEventListener('click', function (e) {
+  var a = document.getElementById('acct'), d = document.getElementById('driverAcct');
+  if ((!a || !a.contains(e.target)) && (!d || !d.contains(e.target))) {
+    usrCloseMenu(); usrCloseMenu('driverAcct');
+  }
+});
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { usrCloseMenu(); usrCloseMenu('driverAcct'); } });
+window.addEventListener('resize', function () { usrCloseMenu(); usrCloseMenu('driverAcct'); });
 
 function usrEsc(v) { var d = document.createElement('div'); d.textContent = v == null ? '' : String(v); return d.innerHTML; }
 function usrFmtDate(v) { if (!v) return 'Never'; var d = new Date(v); return isNaN(d) ? '' : d.toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }); }
@@ -3462,14 +3825,21 @@ function usrLoadUsers() {
       var status = !active ? '<span class="usr-badge off">Disabled</span>' : (u.must_change_password ? '<span class="usr-badge wait">Awaiting first sign-in</span>' : '<span class="usr-badge on">Active</span>');
       var acts = '';
       if (u.username !== me) {
-        acts = '<button class="invoice-btn" onclick="usrToggle(\'' + u.username + '\',' + (active ? 'false' : 'true') + ')">' + (active ? 'Disable' : 'Enable') + '</button> ' +
-               '<button class="invoice-btn" onclick="usrReset(\'' + u.username + '\')">Reset Password</button>';
+        acts = '<button class="invoice-btn" data-user-action="toggle" data-username="' + usrEsc(u.username) +
+               '" data-active="' + (active ? 'false' : 'true') + '">' + (active ? 'Disable' : 'Enable') + '</button> ' +
+               '<button class="invoice-btn" data-user-action="reset" data-username="' + usrEsc(u.username) + '">Reset Password</button>';
       } else { acts = '<span class="usr-note">You</span>'; }
       var roleName = u.role === 'admin' ? 'Admin' : (u.role === 'driver' ? 'Driver' : 'Employee');
       html += '<tr><td>' + usrEsc(u.full_name) + '</td><td>' + usrEsc(u.username) + '</td><td>' + roleName + '</td><td>' + usrEsc(u.driver_id || '') + '</td><td>' + status +
               '</td><td>' + usrEsc(usrFmtDate(u.last_login)) + '</td><td>' + usrEsc(u.created_by || '') + '</td><td>' + acts + '</td></tr>';
     });
     box.innerHTML = html + '</tbody></table>';
+    box.onclick = function (event) {
+      var button = event.target.closest('button[data-user-action]');
+      if (!button) return;
+      if (button.dataset.userAction === 'toggle') usrToggle(button.dataset.username, button.dataset.active === 'true');
+      if (button.dataset.userAction === 'reset') usrReset(button.dataset.username);
+    };
   }).withFailureHandler(function (e) { box.innerHTML = '<p class="usr-note">Could not load accounts: ' + usrEsc(e && e.message) + '</p>'; }).listUsers();
 }
 
